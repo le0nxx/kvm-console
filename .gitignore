@@ -1,0 +1,23 @@
+# dependencies / build output
+node_modules/
+dist/
+.cache/
+release/
+
+# local packaging artifacts
+packaging/arch/pkg/
+packaging/arch/stage/
+packaging/arch/src/
+packaging/arch/*.tar.gz
+packaging/arch/*.pkg.tar.*
+packaging/arch/*.pkg.tar.zst
+
+# local screenshots / smoke output
+artifacts/
+*.log
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

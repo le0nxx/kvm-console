@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:" />
+    <title>KVM Console</title>
+    <link rel="icon" type="image/svg+xml" href="logo.svg" />
+    <script src="theme-boot.js"></script>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="topbar">
+        <div class="brand">
+          <span class="logo"></span>
+          <div class="brand-text">
+            <b>KVM CONSOLE</b>
+            <i>多路控制台</i>
+          </div>
+        </div>
+
+        <div class="seg" id="layout-seg" title="网格布局">
+          <button data-cols="2" data-rows="2">2×2</button>
+          <button data-cols="3" data-rows="3" class="on">3×3</button>
+          <button data-cols="4" data-rows="3">4×3</button>
+        </div>
+
+        <div id="focus-info" class="focus-info hidden">
+          <b id="focus-name"></b>
+        </div>
+        <div class="stat" id="stat">0 个标签</div>
+        <div id="download-chip" class="download-chip hidden" title="下载中">
+          <span id="dl-info">0</span>
+        </div>
+
+        <div class="spacer"></div>
+
+        <button class="btn" id="btn-connect">连接</button>
+        <button class="btn ghost" id="btn-launcher">快速连接</button>
+        <button class="btn ghost" id="btn-scan">扫描网段</button>
+        <button class="btn ghost" id="btn-reconnect-all">重连</button>
+        <button class="btn ghost" id="btn-input" title="文本/快捷键">文本/快捷键</button>
+        <button class="btn" id="btn-media">虚拟媒体</button>
+        <button class="btn ghost" id="btn-broadcast" title="键盘广播到所有窗格">广播</button>
+        <button class="btn ghost" id="btn-power" title="电源控制">电源</button>
+        <button class="btn ghost" id="btn-settings">设置</button>
+      </header>
+
+      <main id="grid">
+        <div id="tiles"></div>
+
+        <div id="landing" class="landing hidden">
+          <div class="landing-card">
+            <h1>连接一台 BMC</h1>
+            <p class="sub">填地址和密码直接连；不想要记录就点「仅连接」，关掉标签即消失。</p>
+
+            <div class="quick-grid">
+              <label>BMC 地址<input id="l-host" placeholder="192.168.10.11" autocomplete="off" /></label>
+              <label>用户名<input id="l-username" placeholder="Administrator" autocomplete="off" /></label>
+              <label>密码<input id="l-password" type="text" placeholder="Admin@9000" /></label>
+              <label>厂商<select id="l-vendor"></select></label>
+              <label>连接方式<select id="l-mode"><option value="auto">自动</option><option value="web">Web</option><option value="vnc">VNC</option></select></label>
+            </div>
+
+            <div class="preset-row">
+              <div class="preset-chips" id="l-presets"></div>
+              <button type="button" class="btn tiny ghost" id="l-save-preset">＋ 存为预设</button>
+            </div>
+
+            <div class="quick-actions">
+              <button class="btn primary big" id="btn-landing-connect">连接</button>
+              <button class="btn big" id="btn-landing-only">仅连接</button>
+              <button class="btn ghost big" id="btn-landing-scan">扫描本网段</button>
+            </div>
+            <div class="form-msg" id="landing-msg"></div>
+
+            <div class="recent-block">
+              <div class="recent-head">最近连接</div>
+              <div id="landing-recent" class="recent-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="empty" class="empty hidden">
+          <div class="empty-card">
+            <h2>没有打开的会话</h2>
+            <p>连接一台 BMC，或者扫描同网段自动发现。</p>
+            <button class="btn primary" id="btn-empty-connect">连接 BMC</button>
+          </div>
+        </div>
+      </main>
+
+      <footer id="strip"></footer>
+
+      <!-- unified tool dock -->
+      <div id="tool-dock" class="hidden">
+        <div class="dock-targets">
+          <div class="pick-head">
+            <span>目标（可多选）</span>
+            <button class="btn tiny ghost" id="dock-all">全选</button>
+            <button class="btn tiny ghost" id="dock-none">清除</button>
+            <button class="btn tiny ghost" id="dock-reset">重置</button>
+          </div>
+          <div class="target-list" id="dock-list"></div>
+        </div>
+        <div id="dock-panel-input" class="dock-panel">
+          <textarea id="dock-text" rows="4" placeholder="粘贴要输入到 KVM 的文本（换行=Enter）"></textarea>
+          <button class="btn primary" id="dock-send">发送到选中</button>
+          <div class="keys-title">文本预设（点击直接发送，可增删）</div>
+          <div class="preset-list" id="preset-list"></div>
+          <div class="preset-add">
+            <input id="preset-input" placeholder="新增预设，例如 Admin@9000" />
+            <button class="btn tiny" id="preset-add">添加</button>
+          </div>
+          <div class="keys-title">常用快捷键（发送到选中）</div>
+          <div class="keys-grid" id="dock-keys">
+            <button class="btn tiny" data-combo="control,alt,Delete">Ctrl+Alt+Del</button>
+            <button class="btn tiny" data-combo="alt,F4">Alt+F4</button>
+            <button class="btn tiny" data-combo="control,shift,Escape">Ctrl+Shift+Esc</button>
+            <button class="btn tiny" data-combo="control,alt,Backspace">Ctrl+Alt+Backspace</button>
+            <button class="btn tiny" data-combo="meta,r">Win+R</button>
+            <button class="btn tiny" data-combo="meta,l">Win+L</button>
+            <button class="btn tiny" data-combo="control,alt,F1">Ctrl+Alt+F1</button>
+            <button class="btn tiny" data-combo="control,alt,F2">Ctrl+Alt+F2</button>
+            <button class="btn tiny" data-combo="control,alt,F3">Ctrl+Alt+F3</button>
+            <button class="btn tiny" data-combo="control,alt,F4">Ctrl+Alt+F4</button>
+            <button class="btn tiny" data-combo="control,alt,F5">Ctrl+Alt+F5</button>
+            <button class="btn tiny" data-combo="control,alt,F6">Ctrl+Alt+F6</button>
+            <button class="btn tiny" data-combo="control,alt,F7">Ctrl+Alt+F7</button>
+            <button class="btn tiny" data-combo="control,alt,F8">Ctrl+Alt+F8</button>
+            <button class="btn tiny" data-combo="F2">F2</button>
+            <button class="btn tiny" data-combo="F11">F11</button>
+            <button class="btn tiny" data-combo="F12">F12</button>
+            <button class="btn tiny" data-combo="Delete">Del</button>
+            <button class="btn tiny" data-combo="Escape">Esc</button>
+          </div>
+        </div>
+        <div id="dock-panel-media" class="dock-panel hidden">
+          <div class="media-pick">
+            <button class="btn" id="dock-pick">选择镜像</button>
+            <span id="dock-file" class="muted">未选择文件</span>
+          </div>
+          <label class="check"><input type="checkbox" id="dock-boot" checked /> 设置下次从光驱启动</label>
+          <div class="form-actions">
+            <button class="btn primary" id="dock-mount">挂载选中</button>
+            <button class="btn" id="dock-eject">卸载选中</button>
+          </div>
+          <div class="muted small" id="dock-media-status"></div>
+        </div>
+        <div id="dock-panel-broadcast" class="dock-panel hidden">
+          <div class="input-body">
+            <div class="muted small">勾选要接收键盘广播的目标，然后启用。广播只转发普通按键和 Shift 组合。</div>
+            <button class="btn primary" id="btn-broadcast-toggle">启用广播</button>
+            <div class="muted small" id="broadcast-state">未启用</div>
+          </div>
+        </div>
+        <div id="dock-panel-reconnect" class="dock-panel hidden">
+          <div class="input-body">
+            <div class="muted small">勾选要重连的服务器；重置会清除本机保存的凭据、Cookie 和连接缓存。</div>
+            <div class="form-actions">
+              <button class="btn primary" id="btn-reconnect-ids">重连选中</button>
+              <button class="btn danger" id="btn-reset-connection">重置连接</button>
+            </div>
+          </div>
+        </div>
+        <div id="dock-panel-power" class="dock-panel hidden">
+          <div class="keys-grid" id="dock-power">
+            <button class="btn tiny" data-power="on">开机</button>
+            <button class="btn tiny" data-power="shutdown">软关机</button>
+            <button class="btn tiny" data-power="off">强制关机</button>
+            <button class="btn tiny" data-power="graceful">软重启</button>
+            <button class="btn tiny" data-power="reset">强制重启</button>
+            <button class="btn tiny" data-power="nmi">NMI</button>
+          </div>
+          <div class="muted small">通过 Redfish 发送；强制关机会立即断电。</div>
+        </div>
+      </div>
+
+        <!-- connect -->
+        <div id="sheet-connect" class="sheet hidden">
+          <form id="connect-form" class="connect-form" autocomplete="off">
+            <div class="grid2">
+              <label>BMC 地址<input id="c-host" placeholder="192.168.10.11" required /></label>
+              <label>BMC 端口<input id="c-port" type="number" value="443" /><small class="field-note">Web/Redfish 端口，通常 443；VNC 端口自动探测</small></label>
+              <label>用户名<input id="c-username" placeholder="Administrator" /></label>
+              <label>密码<input id="c-password" type="text" placeholder="留空则沿用历史密码" /></label>
+              <label>厂商<select id="c-vendor"></select></label>
+              <label>协议<select id="c-scheme"><option value="https">https</option><option value="http">http</option></select></label>
+              <label>连接方式<select id="c-mode"><option value="auto">自动（推荐）</option><option value="web">Web 控制台</option><option value="vnc">VNC（自动开启）</option></select><small class="field-note" id="c-mode-note">戴尔选 VNC 会占用虚拟控制台，Web KVM 将不可用。</small></label>
+              <label>备注名（可选）<input id="c-name" placeholder="不填就用 IP 显示" /></label>
+              <label>KVM 地址（可选）<input id="c-kvm" placeholder="自动识别失败时手填" /></label>
+            </div>
+            <div class="vendor-hint" id="c-hint"></div>
+            <div class="vendor-defaults" id="c-defaults"></div>
+            <div class="preset-row">
+              <div class="preset-chips" id="c-presets"></div>
+              <button type="button" class="btn tiny ghost" id="c-save-preset">＋ 存为预设</button>
+            </div>
+            <div class="license-drop hidden" id="c-license">
+              <b>iDRAC 许可文件</b>
+              <span id="c-license-hint">拖拽 .xml 许可到这里，或点击选择</span>
+              <input type="file" id="c-license-file" accept=".xml" class="hidden" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn primary" id="btn-connect-save">连接</button>
+              <button type="button" class="btn" id="btn-connect-only">仅连接（不记历史）</button>
+              <button type="button" class="btn" id="c-reset">重置输入</button>
+              <span class="form-msg" id="connect-msg"></span>
+            </div>
+            <div class="recent-block">
+              <div class="recent-title">最近连接</div>
+              <div class="recent-list" id="connect-recent"></div>
+            </div>
+          </form>
+        </div>
+
+        <!-- scan -->
+        <div id="sheet-scan" class="sheet hidden">
+          <div class="scan-head">
+            <label>网段<input id="scan-subnet" placeholder="192.168.8.0/24" /></label>
+            <button class="btn primary" id="btn-scan-start">开始扫描</button>
+            <button class="btn ghost hidden" id="btn-scan-cancel">取消</button>
+            <label class="check"><input type="checkbox" id="scan-select-all" /> 全选</label>
+            <button class="btn" id="btn-scan-connect">连接选中</button>
+            <span class="muted small" id="scan-status"></span>
+          </div>
+          <div class="scan-bar"><div id="scan-bar-fill"></div></div>
+          <div class="scan-list" id="scan-results"></div>
+        </div>
+
+        <!-- shortcuts -->
+        <div id="sheet-shortcuts" class="sheet hidden">
+          <div class="settings-grid">
+            <label>语言
+              <select id="set-lang">
+                <option value="auto">自动（跟随系统）</option>
+                <option value="zh">中文</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label>主题
+              <select id="set-theme">
+                <option value="auto">自动（跟随系统）</option>
+                <option value="light">日间</option>
+                <option value="dark">夜间</option>
+              </select>
+            </label>
+          </div>
+          <div class="shortcut-head">
+            <span class="sheet-hint">点击右侧按键框后按下组合键；Esc 取消，退格清除</span>
+            <button class="btn tiny ghost" id="shortcut-reset">恢复默认</button>
+          </div>
+          <div id="shortcut-list" class="shortcut-list"></div>
+        </div>
+
+        <!-- launcher -->
+        <div id="sheet-launcher" class="sheet hidden">
+          <div class="launcher">
+            <input id="launcher-input" class="launcher-input" placeholder="输入主机名 / IP / 厂商，回车直达…" autocomplete="off" />
+            <div class="launcher-list" id="launcher-list"></div>
+
+          </div>
+        </div>
+      <div id="power-confirm" class="confirm-overlay hidden">
+        <div class="confirm-card">
+          <div class="confirm-title" id="confirm-title">确认操作</div>
+          <div class="confirm-text" id="power-confirm-text"></div>
+          <div class="confirm-targets" id="power-targets"></div>
+          <div class="form-actions">
+            <button class="btn" id="power-cancel">取消</button>
+            <button class="btn danger" id="power-ok">确认发送</button>
+          </div>
+        </div>
+      </div>
+      <div id="download-bar" class="download-bar hidden">
+        <div class="dl-name" id="dl-name">下载</div>
+        <div class="dl-track"><div id="dl-fill"></div></div>
+        <div class="dl-info" id="dl-info">0%</div>
+      </div>
+      <div id="toast" class="toast hidden"></div>
+    </div>
+    <script src="i18n.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

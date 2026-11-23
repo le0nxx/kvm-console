@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="KVM Console">
+  <rect x="96" y="96" width="144" height="144" rx="26" fill="#3B7BEA" opacity="0.28"/>
+  <rect x="272" y="96" width="144" height="144" rx="26" fill="#3B7BEA" opacity="0.28"/>
+  <rect x="96" y="272" width="144" height="144" rx="26" fill="#3B7BEA" opacity="0.28"/>
+  <rect x="272" y="272" width="144" height="144" rx="26" fill="#3B7BEA" opacity="1"/>
+  <path d="M312 336 L332 356 L312 376" fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M346 376 L372 376" fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round"/>
+</svg>

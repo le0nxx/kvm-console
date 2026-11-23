@@ -1,0 +1,85 @@
+{
+  "name": "kvm-console",
+  "version": "2.0.11",
+  "private": true,
+  "description": "Multi-session web KVM console for Huawei/xFusion iBMC, Dell iDRAC and Inspur BMCs",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && node scripts/launch.js",
+    "demo": "npm run build && node scripts/launch.js --demo",
+    "smoke": "npm run build && node scripts/launch.js --demo --smoke --soft-render",
+    "test": "npm run build && node --test test/*.test.js",
+    "postinstall": "node scripts/ensure-electron.js",
+    "prestart": "node scripts/ensure-electron.js",
+    "predemo": "node scripts/ensure-electron.js",
+    "presmoke": "node scripts/ensure-electron.js",
+    "dist:linux": "npm run build && electron-builder --linux pacman",
+    "dist:win": "npm run build && electron-builder --win nsis portable"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.2",
+    "electron": "^45.3.3",
+    "electron-builder": "^26.18.0",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "@novnc/novnc": "^1.7.0",
+    "ws": "^8.23.0"
+  },
+  "author": "KVM Console contributors",
+  "build": {
+    "appId": "com.kvmconsole.app",
+    "productName": "KVM Console",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "src/renderer/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "linux": {
+      "target": [
+        "pacman"
+      ],
+      "category": "Utility",
+      "icon": "build/icon.png",
+      "maintainer": "KVM Console <kvm@localhost>",
+      "synopsis": "Multi-session KVM console",
+      "description": "Multi-session web KVM console for Huawei/xFusion, Dell iDRAC and Inspur BMCs.",
+      "syncDesktopName": true
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "KVM Console"
+    },
+    "pacman": {
+      "depends": [
+        "gtk3",
+        "nss",
+        "libxss",
+        "libnotify",
+        "libxtst",
+        "alsa-lib"
+      ]
+    }
+  },
+  "desktopName": "kvm-console",
+  "license": "MIT"
+}

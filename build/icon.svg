@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="srv" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4c5560"/>
+      <stop offset="0.14" stop-color="#353c45"/>
+      <stop offset="1" stop-color="#1d2228"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6d7884"/>
+      <stop offset="1" stop-color="#4a525c"/>
+    </linearGradient>
+    <linearGradient id="bezel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#40474f"/>
+      <stop offset="1" stop-color="#1a1e23"/>
+    </linearGradient>
+    <linearGradient id="lcd" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#164a86"/>
+      <stop offset="1" stop-color="#061525"/>
+    </linearGradient>
+    <linearGradient id="bay" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2e353d"/>
+      <stop offset="1" stop-color="#171b20"/>
+    </linearGradient>
+    <filter id="drop" x="-12%" y="-12%" width="124%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#000" flood-opacity="0.38"/>
+    </filter>
+  </defs>
+
+  <g>
+    <!-- Papirus-style hard shadow -->
+    <rect x="42" y="310" width="428" height="126" rx="9" fill="#000000" opacity="0.20"/>
+    <rect x="130" y="96" width="260" height="196" rx="18" fill="#000000" opacity="0.20"/>
+
+    <!-- rack ears -->
+    <rect x="26" y="300" width="46" height="124" rx="6" fill="#61666d"/>
+    <rect x="440" y="300" width="46" height="124" rx="6" fill="#61666d"/>
+    <g fill="#161a1f">
+      <circle cx="49" cy="326" r="8"/><circle cx="49" cy="398" r="8"/>
+      <circle cx="463" cy="326" r="8"/><circle cx="463" cy="398" r="8"/>
+    </g>
+    <g fill="#aab4c0">
+      <circle cx="49" cy="326" r="3.5"/><circle cx="49" cy="398" r="3.5"/>
+      <circle cx="463" cy="326" r="3.5"/><circle cx="463" cy="398" r="3.5"/>
+    </g>
+
+    <!-- server top surface -->
+    <path d="M70 286 L442 286 L470 302 L42 302 Z" fill="#61666d"/>
+    <path d="M70 286 L442 286 L442 292 L70 292 Z" fill="#ffffff" opacity="0.12"/>
+
+    <!-- server body -->
+    <rect x="42" y="300" width="428" height="126" rx="9" fill="#4f4f4f"/>
+    <rect x="42" y="300" width="428" height="7" rx="3" fill="#ffffff" opacity="0.12"/>
+    <rect x="42" y="414" width="428" height="12" rx="5" fill="#000" opacity="0.35"/>
+
+    <!-- drive bays -->
+    <g>
+      <rect x="66" y="318" width="150" height="82" rx="5" fill="#11151a"/>
+      <rect x="72" y="324" width="66" height="34" rx="3" fill="#2b3038"/>
+      <rect x="144" y="324" width="66" height="34" rx="3" fill="#2b3038"/>
+      <rect x="72" y="364" width="66" height="30" rx="3" fill="#2b3038"/>
+      <rect x="144" y="364" width="66" height="30" rx="3" fill="#2b3038"/>
+      <g fill="#87d96c"><circle cx="80" cy="341" r="3"/><circle cx="152" cy="341" r="3"/><circle cx="80" cy="379" r="3"/><circle cx="152" cy="379" r="3"/></g>
+      <g fill="#6f7b88" opacity="0.7">
+        <rect x="90" y="336" width="34" height="3" rx="1.5"/><rect x="162" y="336" width="34" height="3" rx="1.5"/>
+        <rect x="90" y="376" width="34" height="3" rx="1.5"/><rect x="162" y="376" width="34" height="3" rx="1.5"/>
+      </g>
+    </g>
+
+    <!-- vents -->
+    <g fill="#11151a">
+      <rect x="246" y="318" width="8" height="82" rx="4"/><rect x="262" y="318" width="8" height="82" rx="4"/>
+      <rect x="278" y="318" width="8" height="82" rx="4"/><rect x="294" y="318" width="8" height="82" rx="4"/>
+      <rect x="310" y="318" width="8" height="82" rx="4"/><rect x="326" y="318" width="8" height="82" rx="4"/>
+      <rect x="342" y="318" width="8" height="82" rx="4"/><rect x="358" y="318" width="8" height="82" rx="4"/>
+      <rect x="374" y="318" width="8" height="82" rx="4"/><rect x="390" y="318" width="8" height="82" rx="4"/>
+    </g>
+
+    <!-- front status -->
+    <circle cx="430" cy="330" r="6" fill="#0d1013"/>
+    <circle cx="430" cy="330" r="3" fill="#87d96c"/>
+    <rect x="414" y="352" width="30" height="14" rx="4" fill="#0d1013"/>
+    <rect x="414" y="374" width="30" height="14" rx="4" fill="#0d1013"/>
+
+    <!-- monitor neck -->
+    <rect x="238" y="270" width="36" height="22" rx="6" fill="#2a3037"/>
+    <rect x="214" y="284" width="84" height="12" rx="6" fill="#3c444e"/>
+
+    <!-- KVM monitor -->
+    <rect x="126" y="86" width="260" height="196" rx="18" fill="#3a3f48"/>
+    <rect x="126" y="86" width="260" height="196" rx="18" fill="none" stroke="#7d8894" stroke-opacity="0.35" stroke-width="2"/>
+    <rect x="142" y="102" width="228" height="142" rx="6" fill="#14263b"/>
+
+    <!-- 2x2 panes -->
+    <rect x="154" y="114" width="98" height="58" rx="3" fill="#5294e2"/>
+    <rect x="260" y="114" width="98" height="58" rx="3" fill="#1f3a55"/>
+    <rect x="154" y="180" width="98" height="52" rx="3" fill="#1f3a55"/>
+    <rect x="260" y="180" width="98" height="52" rx="3" fill="#5294e2"/>
+
+    <path d="M170 132 l10 8 -10 8" fill="none" stroke="#eaf4ff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="186" y="146" width="14" height="4" rx="2" fill="#eaf4ff"/>
+    <g fill="#7fa8d4" opacity="0.85">
+      <rect x="272" y="124" width="62" height="4" rx="2"/><rect x="272" y="134" width="44" height="4" rx="2"/>
+      <rect x="272" y="144" width="54" height="4" rx="2"/>
+      <rect x="166" y="190" width="62" height="4" rx="2"/><rect x="166" y="200" width="44" height="4" rx="2"/>
+      <rect x="166" y="210" width="54" height="4" rx="2"/>
+      <rect x="272" y="190" width="62" height="4" rx="2"/><rect x="272" y="200" width="42" height="4" rx="2"/>
+    </g>
+    <circle cx="340" cy="214" r="7" fill="#62c9ea" opacity="0.9"/>
+
+    <!-- monitor bottom bar -->
+    <circle cx="256" cy="260" r="5" fill="#87d96c"/>
+    <rect x="300" y="256" width="44" height="7" rx="3.5" fill="#5a636e"/>
+  </g>
+</svg>

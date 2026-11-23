@@ -1,0 +1,40 @@
+# Maintainer: KVM Console <kvm@localhost>
+pkgname=kvm-console
+pkgver=2.0.11
+pkgrel=1
+pkgdesc='Multi-session web KVM console for Huawei/xFusion, Dell iDRAC and Inspur BMCs'
+arch=('x86_64')
+url='https://github.com/kvm-console/kvm-console'
+license=('MIT')
+depends=('electron')
+options=('!strip')
+source=("${pkgname}-${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  install -d "$pkgdir/usr/lib/${pkgname}" "$pkgdir/usr/bin" \
+    "$pkgdir/usr/share/applications" "$pkgdir/usr/share/icons/hicolor/512x512/apps"
+  cp -a --no-preserve=ownership "${srcdir}/${pkgname}-${pkgver}/." "$pkgdir/usr/lib/${pkgname}/"
+  chmod -R u+rwX,go+rX "$pkgdir/usr/lib/${pkgname}"
+  cat > "$pkgdir/usr/bin/${pkgname}" <<'LAUNCH'
+#!/bin/sh
+if [ -n "$WAYLAND_DISPLAY" ]; then
+  exec /usr/bin/electron --no-sandbox --disable-gpu --ozone-platform=wayland --disable-features=Vulkan /usr/lib/kvm-console "$@"
+fi
+exec /usr/bin/electron --no-sandbox /usr/lib/kvm-console "$@"
+LAUNCH
+  chmod 755 "$pkgdir/usr/bin/${pkgname}"
+  install -Dm644 "${srcdir}/${pkgname}-${pkgver}/assets/icons/icon-512.png" \
+    "$pkgdir/usr/share/icons/hicolor/512x512/apps/${pkgname}.png"
+  cat > "$pkgdir/usr/share/applications/${pkgname}.desktop" <<'DESK'
+[Desktop Entry]
+Name=KVM Console
+Comment=Multi-session web KVM console
+Exec=kvm-console
+Terminal=false
+Type=Application
+Icon=kvm-console
+Categories=Utility;Network;
+StartupWMClass=kvm-console
+DESK
+}

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="KVM Console">
+  <clipPath id="circle"><circle cx="256" cy="256" r="256"/></clipPath>
+  <rect width="512" height="512" rx="256" fill="#3B7BEA"/>
+  <g clip-path="url(#circle)">
+  <rect x="72" y="80" width="368" height="300" rx="30" fill="#FFFFFF" opacity="0.16"/>
+  <rect x="92" y="100" width="368" height="300" rx="30" fill="#FFFFFF" opacity="0.30"/>
+  <rect x="112" y="120" width="368" height="300" rx="30" fill="#FFFFFF"/>
+  <path d="M176 244 L204 272 L176 300" fill="none" stroke="#3B7BEA" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M218 300 L264 300" fill="none" stroke="#3B7BEA" stroke-width="20" stroke-linecap="round"/>
+</g>
+</svg>
