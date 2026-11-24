@@ -1,6 +1,6 @@
 {
   "name": "kvm-console",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "private": true,
   "description": "Multi-session web KVM console for Huawei/xFusion iBMC, Dell iDRAC and Inspur BMCs",
   "main": "dist/main/main.js",

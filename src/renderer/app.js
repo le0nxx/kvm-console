@@ -624,7 +624,8 @@ function renderDock() {
   }
 
   if (show) {
-    dock.querySelector('.dock-targets')?.classList.toggle('hidden', !!sidePanel);
+    const hideTargets = !!sidePanel || dockPanel === 'downloads';
+    dock.querySelector('.dock-targets')?.classList.toggle('hidden', hideTargets);
     const tabs = dock.querySelector('.dock-tabs');
     if (tabs) tabs.classList.toggle('hidden', !!sidePanel);
     for (const tab of dock.querySelectorAll('.dock-tab')) {
