@@ -1472,6 +1472,13 @@ async function captureAll(tag: string): Promise<void> {
   );
 }
 
+async function reportI18nMisses(tag: string, contents: Electron.WebContents): Promise<void> {
+  const misses = await contents
+    .executeJavaScript('JSON.stringify(window.i18n?.misses?.() || [])', true)
+    .catch(() => '[]');
+  if (misses && misses !== '[]') console.log(`[i18n] untranslated in ${tag}: ${misses}`);
+}
+
 async function runSmoke(): Promise<void> {
   const started = Date.now();
   const result: any = { demo: DEMO, startedAt: new Date().toISOString() };
@@ -1531,7 +1538,44 @@ async function runSmoke(): Promise<void> {
           await new Promise((r) => setTimeout(r, 700));
           const shot = await shellView.webContents.capturePage();
           fs.writeFileSync(path.join(ARTIFACTS, `${tag}.png`), shot.toPNG());
+          await reportI18nMisses(tag, shellView.webContents);
         }
+
+        setMode('grid');
+        await new Promise((r) => setTimeout(r, 300));
+        for (const panel of ['terminal', 'power', 'input', 'broadcast', 'reconnect', 'downloads'] as const) {
+          setPanelState({ panel });
+          await new Promise((r) => setTimeout(r, 700));
+          if (panelView) {
+            const shot = await panelView.webContents.capturePage();
+            fs.writeFileSync(path.join(ARTIFACTS, `${panel}.png`), shot.toPNG());
+            await reportI18nMisses(panel, panelView.webContents);
+          }
+          setPanelState(null);
+          await new Promise((r) => setTimeout(r, 300));
+        }
+
+        for (const side of ['connect', 'launcher', 'scan'] as const) {
+          setPanelState({ side });
+          await new Promise((r) => setTimeout(r, 700));
+          if (panelView) {
+            const shot = await panelView.webContents.capturePage();
+            fs.writeFileSync(path.join(ARTIFACTS, `side-${side}.png`), shot.toPNG());
+            await reportI18nMisses(`side-${side}`, panelView.webContents);
+          }
+          setPanelState(null);
+          await new Promise((r) => setTimeout(r, 300));
+        }
+
+        setPanelState({ side: 'shortcuts' });
+        await new Promise((r) => setTimeout(r, 700));
+        if (panelView) {
+          const shot = await panelView.webContents.capturePage();
+          fs.writeFileSync(path.join(ARTIFACTS, 'shortcuts.png'), shot.toPNG());
+          await reportI18nMisses('shortcuts', panelView.webContents);
+        }
+        setPanelState(null);
+        await new Promise((r) => setTimeout(r, 300));
 
         const first = manager.order()[0]?.id ?? null;
         setMode('focus', first);

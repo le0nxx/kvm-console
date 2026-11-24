@@ -2,6 +2,10 @@
 const api = window.kvm;
 const el = (id) => document.getElementById(id);
 
+const en = () => (window.i18n?.active?.() || 'zh') === 'en';
+const t = (text, params) => (window.i18n?.t ? window.i18n.t(text, params) : text);
+const termPrompt = () => `$ ${t('等待命令')}`;
+
 const STATE_LABEL = {
   idle: '待连接',
   loading: '正在打开',
@@ -160,6 +164,7 @@ const esc = (s) =>
 /* ------------------------------------------------------------------ boot */
 async function init() {
   applyTheme();
+  el('term-output').textContent = termPrompt();
   themeMedia.addEventListener('change', () => { if (themeMode === 'auto') applyTheme(); });
   bindTopbar();
   bindSheets();
@@ -229,10 +234,10 @@ function notifyLicenses(list) {
   for (const d of list) {
     const prev = lastLicense.get(d.id);
     if (d.license && d.license.state === 'activated' && prev !== 'activated') {
-      toast(`${d.host}：${d.license.note}`, 'ok', 9000);
+      toast(t('{host}：{note}', { host: d.host, note: t(d.license.note) }), 'ok', 9000);
     } else if (d.license && d.license.state === 'failed' && prev !== 'failed') {
       const deviceId = d.id;
-      toast(`${d.host}：${d.license.note}`, 'err', 0, {
+      toast(t('{host}：{note}', { host: d.host, note: t(d.license.note) }), 'err', 0, {
         label: '手动上传许可',
         run: () => void uploadLicense(deviceId),
       });
@@ -247,9 +252,9 @@ function notifyTransitions(list) {
     if (s.state === 'manual' && prev !== 'manual') {
       const device = (state.devices || []).find((d) => d.id === s.id);
       if (device && device.license && device.license.state === 'failed') continue;
-      toast(`${s.name}：${s.detail || '需要手动处理'}`, 'err', 10000);
+      toast(t('{name}：{detail}', { name: s.name, detail: t(s.detail || '需要手动处理') }), 'err', 10000);
     } else if (s.state === 'error' && prev !== 'error') {
-      toast(`${s.name}：${s.detail || '连接失败'}`, 'err', 8000);
+      toast(t('{name}：{detail}', { name: s.name, detail: t(s.detail || '连接失败') }), 'err', 8000);
     }
   }
   lastStates = new Map(list.map((s) => [s.id, s.state]));
@@ -278,12 +283,12 @@ function labelOf(vendorId) {
 }
 
 function relTime(ts) {
-  if (!ts) return '从未';
+  if (!ts) return t('从未');
   const diff = Date.now() - ts;
-  if (diff < 60_000) return '刚刚';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
-  return `${Math.floor(diff / 86_400_000)} 天前`;
+  if (diff < 60_000) return t('刚刚');
+  if (diff < 3_600_000) return t('{n} 分钟前', { n: Math.floor(diff / 60_000) });
+  if (diff < 86_400_000) return t('{n} 小时前', { n: Math.floor(diff / 3_600_000) });
+  return t('{n} 天前', { n: Math.floor(diff / 86_400_000) });
 }
 
 function sendGrid() {
@@ -434,9 +439,10 @@ function renderStat() {
   const list = sessions();
   const ready = list.filter((s) => s.state === 'ready').length;
   const bad = list.filter((s) => s.state === 'error').length;
-  el('stat').innerHTML = `${list.length} 个标签 · <b>${ready}</b> 就绪${
-    bad ? ` · <span style="color:#f85149">${bad} 失败</span>` : ''
-  } · v${esc(state.app.version)}${state.app.demo ? ' · DEMO' : ''}`;
+  const counts = `${list.length} ${en() ? 'tabs' : '个标签'} · <b>${ready}</b> ${en() ? 'ready' : '就绪'}${
+    bad ? ` · <span style="color:#f85149">${bad} ${en() ? 'failed' : '失败'}</span>` : ''
+  }`;
+  el('stat').innerHTML = `${counts} · v${esc(state.app.version)}${state.app.demo ? ' · DEMO' : ''}`;
 }
 
 function renderFocusInfo() {
@@ -498,9 +504,9 @@ function renderHistory() {
           <span class="dot ${st}"></span>
           <span class="who">
             <b>${esc(d.name || d.host)} ${d.open ? '<span class="badge-open">已打开</span>' : ''}</b>
-            <span>${esc(d.host)}:${d.port} · ${esc(labelOf(d.vendor))} · ${d.hasPassword ? esc(d.username) : '无凭据'}</span>
+            <span>${esc(d.host)}:${d.port} · ${esc(labelOf(d.vendor))} · ${d.hasPassword ? esc(d.username) : esc(t('无凭据'))}</span>
           </span>
-          <span class="when">${esc(relTime(d.lastUsedAt))}${d.ephemeral ? ' · 临时' : ''}</span>
+          <span class="when">${esc(relTime(d.lastUsedAt))}${d.ephemeral ? ` · ${esc(t('临时'))}` : ''}</span>
           <button class="btn tiny" data-act="open" data-id="${esc(d.id)}">${d.open ? '聚焦' : '连接'}</button>
           <button class="btn tiny ghost" data-act="del" data-id="${esc(d.id)}">删除</button>
         </div>`;
@@ -666,7 +672,7 @@ function renderDock() {
         .map((s) => {
           const m = state.media[s.id];
           const extra = m.size ? ` · ${humanSize(m.size)}${m.speed ? ` · ${humanSize(m.speed)}/s` : ''}` : '';
-          return `${s.host}: ${m.name || '已挂载'}${extra}`;
+          return `${s.host}: ${m.name || t('已挂载')}${extra}`;
         });
       el('dock-media-status').innerHTML = rows.join('<br>') || '没有已挂载的镜像';
     }
@@ -1387,7 +1393,11 @@ function renderDownloads() {
   list.innerHTML = rows
     .map((d) => {
       const p = d.total > 0 ? Math.min(100, Math.round((d.received / d.total) * 100)) : 0;
-      const status = d.state === 'done' ? '完成' : d.state === 'error' ? `失败${d.error ? `：${esc(d.error)}` : ''}` : `${p}%`;
+      const status = d.state === 'done'
+        ? esc(t('完成'))
+        : d.state === 'error'
+          ? esc(d.error ? t('失败：{error}', { error: d.error }) : t('失败'))
+          : `${p}%`;
       return `
         <div class="download-row" data-path="${esc(d.path || '')}">
           <div class="download-main">
@@ -1529,7 +1539,7 @@ function bindSheets() {
     if (!row) return;
     const id = row.dataset.id;
     if (btn?.dataset.act === 'del') {
-      if (!confirm('从历史中删除这条记录？（不影响 BMC 本身）')) return;
+      if (!confirm(t('从历史中删除这条记录？（不影响 BMC 本身）'))) return;
       render(await api.removeHistory(id));
       return;
     }
@@ -1693,7 +1703,7 @@ function bindSheets() {
       out.textContent += `\n[${session?.host || id}]\n`;
       // eslint-disable-next-line no-await-in-loop
       const res = await api.runTool(id, tool, command);
-      out.textContent += (res?.output || res?.error || '(无输出)') + '\n';
+      out.textContent += (res?.output || res?.error || t('(无输出)')) + '\n';
       if (res?.ok) ok += 1;
       out.scrollTop = out.scrollHeight;
     }
@@ -1709,7 +1719,7 @@ function bindSheets() {
     }
   });
   el('term-clear').addEventListener('click', () => {
-    el('term-output').textContent = '$ 等待命令';
+    el('term-output').textContent = termPrompt();
   });
 
   el('dock-send').addEventListener('click', () => void sendDockText(el('dock-text').value));
@@ -1796,7 +1806,7 @@ function bindSheets() {
   el('btn-reset-connection').addEventListener('click', async () => {
     const ids = dockIds();
     if (!ids.length) return toast('先勾选至少一台服务器', 'err');
-    if (!confirm(`将清除 ${ids.length} 台服务器在本机保存的凭据、Cookie 和连接缓存，确定继续？`)) return;
+    if (!confirm(t('将清除 {n} 台服务器在本机保存的凭据、Cookie 和连接缓存，确定继续？', { n: ids.length }))) return;
     let ok = 0;
     for (const id of ids) {
       // eslint-disable-next-line no-await-in-loop

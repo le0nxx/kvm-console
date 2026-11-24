@@ -154,6 +154,8 @@ packaging/arch/    Arch PKGBUILD
 docs/              使用文档与设计笔记
 ```
 
+多语言：界面文案以中文为准，英文由 `src/renderer/i18n.js` 里的词条表和模式规则渲染；主进程只发中文，翻译集中在渲染层。`npm run smoke` 会打印 `[i18n] untranslated ...`，列出英文界面里漏翻的文案。
+
 构建安装包：
 
 ```bash
