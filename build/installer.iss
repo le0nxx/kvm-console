@@ -1,5 +1,5 @@
 #define MyAppName "KVM Console"
-#define MyAppVersion "2.3.1"
+#define MyAppVersion "2.3.2"
 #define MyAppPublisher "KVM Console contributors"
 #define MyAppURL "https://github.com/le0nxx/kvm-console"
 #define MyAppExeName "KVM Console.exe"

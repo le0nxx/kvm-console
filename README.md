@@ -53,7 +53,7 @@ KVM Console 用**连接历史 + 网段扫描**代替设备台账，不强制命�
 ### Arch Linux
 
 ```bash
-sudo pacman -U kvm-console-2.3.1-1-x86_64.pkg.tar.zst
+sudo pacman -U kvm-console-2.3.2-1-x86_64.pkg.tar.zst
 kvm-console
 ```
 
