@@ -697,6 +697,13 @@ body.panel-mode .sheet { background: var(--bg-2); }
 /* narrower side panel */
 #tool-dock { width: 560px; }
 .sheet.in-dock { width: 560px; }
+/* In the dock the sheet is full height: pin the launcher to the top and let the
+   result list take the remaining space instead of centring everything. */
+.sheet.in-dock .launcher {
+  margin: 12px auto 0; width: min(680px, 100%); padding: 0 14px;
+  box-sizing: border-box; flex: 1 1 auto; min-height: 0;
+}
+.sheet.in-dock .launcher-list { max-height: none; flex: 1 1 auto; min-height: 0; }
 .panel-mode #tool-dock, .panel-mode .sheet.in-dock { width: auto; }
 #sheet-connect { width: min(560px, 94vw); max-height: 88vh; }
 #sheet-history { width: min(560px, 94vw); }
