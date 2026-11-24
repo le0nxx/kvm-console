@@ -107,6 +107,7 @@
           <div class="target-list" id="dock-list"></div>
         </div>
         <div id="dock-panel-input" class="dock-panel">
+          <div class="dock-panel-head"><b>文本 / 快捷键</b></div>
           <textarea id="dock-text" rows="4" placeholder="粘贴要输入到 KVM 的文本（换行=Enter）"></textarea>
           <button class="btn primary" id="dock-send">发送到选中</button>
           <div class="keys-title">文本预设（点击直接发送，可增删）</div>
@@ -139,6 +140,7 @@
           </div>
         </div>
         <div id="dock-panel-media" class="dock-panel hidden">
+          <div class="dock-panel-head"><b>虚拟媒体</b></div>
           <div class="media-pick">
             <button class="btn" id="dock-pick">选择镜像</button>
             <span id="dock-file" class="muted">未选择文件</span>
@@ -151,6 +153,7 @@
           <div class="muted small" id="dock-media-status"></div>
         </div>
         <div id="dock-panel-broadcast" class="dock-panel hidden">
+          <div class="dock-panel-head"><b>键盘广播</b></div>
           <div class="input-body">
             <div class="muted small">勾选要接收键盘广播的目标，然后启用。广播只转发普通按键和 Shift 组合。</div>
             <button class="btn primary" id="btn-broadcast-toggle">启用广播</button>
@@ -158,6 +161,7 @@
           </div>
         </div>
         <div id="dock-panel-reconnect" class="dock-panel hidden">
+          <div class="dock-panel-head"><b>重连 / 重置</b></div>
           <div class="input-body">
             <div class="muted small">勾选要重连的服务器；重置会清除本机保存的凭据、Cookie 和连接缓存。</div>
             <div class="form-actions">
@@ -178,6 +182,7 @@
         </div>
 
         <div id="dock-panel-terminal" class="dock-panel hidden">
+          <div class="dock-panel-head"><b>终端</b></div>
           <div class="terminal-bar">
             <select id="term-tool">
               <option value="racadm">racadm</option>
@@ -192,6 +197,7 @@
         </div>
 
         <div id="dock-panel-power" class="dock-panel hidden">
+          <div class="dock-panel-head"><b>电源控制</b></div>
           <div class="keys-grid" id="dock-power">
             <button class="btn tiny" data-power="on">开机</button>
             <button class="btn tiny" data-power="shutdown">软关机</button>

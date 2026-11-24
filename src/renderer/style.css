@@ -1169,3 +1169,87 @@ html[data-theme="light"] .pill.cred-unknown { color: #9a6700; border-color: #e3c
 #dock-panel-downloads { padding: 4px 0; }
 #dock-panel-downloads .download-head { padding: 2px 0 8px; }
 #dock-panel-downloads .download-list { max-height: 46vh; border: 1px solid var(--line); border-radius: 6px; }
+
+/* downloads dock: spacing and compact actions */
+#dock-panel-downloads {
+  padding: 16px;
+  gap: 10px;
+  background: var(--panel);
+}
+#dock-panel-downloads .download-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+#dock-panel-downloads .download-head b {
+  flex: 1;
+  font-size: 14px;
+  letter-spacing: .01em;
+}
+#dock-panel-downloads .download-head .btn {
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  box-shadow: none;
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+}
+#dock-panel-downloads .download-head .btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+#dock-panel-downloads .download-list {
+  max-height: 52vh;
+  min-height: 96px;
+  margin-top: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: auto;
+}
+#dock-panel-downloads .download-list > .muted,
+#dock-panel-downloads .download-list > .small {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 92px;
+  padding: 16px;
+  color: var(--muted);
+}
+#dock-panel-downloads .download-row {
+  padding: 10px 12px;
+}
+#dock-panel-downloads .download-name {
+  font-size: 12px;
+  font-weight: 500;
+}
+#dock-panel-downloads .download-meta {
+  font-size: 10.5px;
+  margin-top: 3px;
+}
+#dock-panel-downloads .download-row .btn {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+/* consistent dock panel headers */
+.dock-panel { padding: 14px 16px; gap: 10px; }
+.dock-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.dock-panel-head b { font-size: 14px; letter-spacing: .01em; }
+.dock-panel .input-body { display: flex; flex-direction: column; gap: 10px; }
+.dock-panel .form-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.dock-panel .keys-title { margin-top: 4px; }
+.dock-panel .keys-grid { gap: 6px; }
+.dock-panel .keys-grid .btn { height: 26px; padding: 0 9px; font-size: 11px; }
