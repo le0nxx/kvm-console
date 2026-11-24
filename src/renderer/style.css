@@ -1279,3 +1279,12 @@ html[data-theme="light"] .pill.cred-unknown { color: #9a6700; border-color: #e3c
 .dock-targets .target-row .who { gap: 5px; align-items: center; }
 .dock-targets .target-row .who b { max-width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dock-targets .target-row .who span { font-size: 10.5px; }
+
+/* larger terminal output */
+#dock-panel-terminal .terminal-output {
+  height: clamp(360px, 58vh, 640px);
+  min-height: 360px;
+}
+#dock-panel-terminal .terminal-bar input { height: 32px; }
+#dock-panel-terminal .terminal-bar select { height: 32px; }
+#dock-panel-terminal #term-run { height: 32px; }
