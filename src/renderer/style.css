@@ -1253,3 +1253,29 @@ html[data-theme="light"] .pill.cred-unknown { color: #9a6700; border-color: #e3c
 .dock-panel .keys-title { margin-top: 4px; }
 .dock-panel .keys-grid { gap: 6px; }
 .dock-panel .keys-grid .btn { height: 26px; padding: 0 9px; font-size: 11px; }
+
+/* compact target chips shared by every tool panel */
+.dock-targets { padding: 10px 12px; }
+.dock-targets .pick-head { margin-bottom: 8px; font-size: 12px; }
+.dock-targets .pick-head .btn { height: 24px; padding: 0 8px; font-size: 10.5px; border-radius: 6px; }
+.dock-targets .target-list {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 82px;
+}
+.dock-targets .target-row {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 100%;
+  padding: 4px 9px;
+  gap: 5px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  font-size: 11px;
+}
+.dock-targets .target-row input { width: 13px; height: 13px; margin: 0; }
+.dock-targets .target-row .dot { width: 6px; height: 6px; }
+.dock-targets .target-row .who { gap: 5px; align-items: center; }
+.dock-targets .target-row .who b { max-width: 132px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dock-targets .target-row .who span { font-size: 10.5px; }
