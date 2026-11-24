@@ -139,9 +139,14 @@ npm install
 npm run build     # TypeScript
 npm start         # 正常启动
 npm run demo      # 9 台 mock BMC
-npm test          # node:test：布局、Range、Redfish、扫描
+npm test          # node:test：布局、Range、Redfish、扫描、多语言
+npm run lint      # ESLint（TS 主进程 + 渲染层 + 测试）
+npm run check     # lint + test，提交前跑这个
 npm run smoke     # 无头快速验证
 ```
+
+TypeScript 开了 `noUnusedLocals` / `noUnusedParameters` / `noImplicitReturns`，
+新增代码请保持 `npm run check` 无输出。
 
 项目结构：
 

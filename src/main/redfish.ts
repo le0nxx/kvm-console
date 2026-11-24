@@ -27,10 +27,21 @@ export interface RedfishTargets {
   slots: VirtualMediaSlot[];
 }
 
+/** Common collection envelope returned by Redfish. */
+export interface RedfishCollection {
+  Members?: Array<Record<string, unknown>>;
+}
+
+/** Error payload shared by Redfish services (Dell and Huawei shapes). */
+export interface RedfishErrorBody {
+  error?: { message?: string; '@Message.ExtendedInfo'?: Array<{ Message?: string }> };
+  '@Message.ExtendedInfo'?: Array<{ Message?: string }>;
+}
+
 interface RawResponse {
   status: number;
   text: string;
-  json: any;
+  json: unknown;
 }
 
 function request(
@@ -59,7 +70,7 @@ function request(
         res.on('data', (c) => chunks.push(c as Buffer));
         res.on('end', () => {
           const text = Buffer.concat(chunks).toString('utf8');
-          let json: any = null;
+          let json: unknown = null;
           try {
             json = text ? JSON.parse(text) : null;
           } catch {
@@ -110,13 +121,13 @@ export class RedfishClient {
     return request(`${this.base}${path}`, method, headers, payload);
   }
 
-  async getJson(path: string): Promise<any> {
+  async getJson<T = Record<string, unknown>>(path: string): Promise<T> {
     const res = await this.call(path);
     if (res.status === 401) throw new RedfishError('Redfish 认证失败（用户名或密码错误）', 401);
     if (res.status === 404) throw new RedfishError(`Redfish 资源不存在：${path}`, 404);
     if (res.status >= 400) throw new RedfishError(`Redfish 请求失败 HTTP ${res.status}：${path}`, res.status);
     if (!res.json) throw new RedfishError(`Redfish 返回非 JSON：${path}`);
-    return res.json;
+    return res.json as T;
   }
 
   async raw(
@@ -124,7 +135,7 @@ export class RedfishClient {
     path: string,
     body?: unknown,
     headers?: Record<string, string>,
-  ): Promise<{ status: number; text: string; json: any }> {
+  ): Promise<RawResponse> {
     return this.call(path, method, body, headers);
   }
 
@@ -138,18 +149,18 @@ export class RedfishClient {
   }
 
   async discover(): Promise<RedfishTargets> {
-    const root = await this.getJson('/redfish/v1');
+    const root = await this.getJson<{ RedfishVersion?: string }>('/redfish/v1');
     if (!root || !root.RedfishVersion) {
       throw new RedfishError('该设备未提供标准 Redfish 服务');
     }
 
     let managerPath: string | undefined;
     try {
-      const managers = await this.getJson('/redfish/v1/Managers');
-      const members: any[] = managers?.Members ?? [];
-      for (const m of members) {
-        if (m?.['@odata.id']) {
-          managerPath = m['@odata.id'];
+      const managers = await this.getJson<RedfishCollection>('/redfish/v1/Managers');
+      for (const m of managers?.Members ?? []) {
+        const path = m?.['@odata.id'];
+        if (typeof path === 'string') {
+          managerPath = path;
           break;
         }
       }
@@ -160,9 +171,9 @@ export class RedfishClient {
 
     let systemPath: string | undefined;
     try {
-      const systems = await this.getJson('/redfish/v1/Systems');
+      const systems = await this.getJson<RedfishCollection>('/redfish/v1/Systems');
       const first = systems?.Members?.[0]?.['@odata.id'];
-      if (first) systemPath = first;
+      if (typeof first === 'string') systemPath = first;
     } catch {
       systemPath = undefined;
     }
@@ -174,9 +185,10 @@ export class RedfishClient {
   private async listVirtualMedia(managerPath: string): Promise<VirtualMediaSlot[]> {
     const candidates: string[] = [];
     try {
-      const collection = await this.getJson(`${managerPath}/VirtualMedia`);
+      const collection = await this.getJson<RedfishCollection>(`${managerPath}/VirtualMedia`);
       for (const m of collection?.Members ?? []) {
-        if (m?.['@odata.id']) candidates.push(m['@odata.id']);
+        const path = m?.['@odata.id'];
+        if (typeof path === 'string') candidates.push(path);
       }
     } catch {
       /* some BMCs only expose fixed slots */
@@ -220,9 +232,9 @@ export class RedfishClient {
 
   private async vmmTarget(slot: VirtualMediaSlot): Promise<string | undefined> {
     try {
-      const detail = await this.getJson(slot.path);
-      for (const oem of Object.values(detail?.Oem ?? {}) as Array<any>) {
-        const actions = oem?.Actions ?? {};
+      const detail = await this.getJson<{ Oem?: Record<string, Record<string, unknown>> }>(slot.path);
+      for (const oem of Object.values(detail?.Oem ?? {})) {
+        const actions = (oem?.Actions ?? {}) as Record<string, { target?: string }>;
         const target =
           actions['#VirtualMedia.VmmControl']?.target ?? actions['#VirtualMedia.InsertMedia']?.target;
         if (target) return String(target);
@@ -256,16 +268,18 @@ export class RedfishClient {
           oem.status,
         );
       }
-      const taskPath = oem.json?.['@odata.id'];
-      if (taskPath) {
+      const taskPath = (oem.json as Record<string, unknown> | null)?.['@odata.id'];
+      if (typeof taskPath === 'string') {
         for (let i = 0; i < 8; i++) {
           await new Promise((r) => setTimeout(r, 700));
-          const task = await this.getJson(taskPath).catch(() => null);
+          const task = await this.getJson<{
+            TaskState?: string;
+            Messages?: { Message?: string } | Array<{ Message?: string }>;
+          }>(taskPath).catch(() => null);
           if (!task) break;
           if (task.TaskState === 'Exception') {
-            const msg =
-              task.Messages?.Message ??
-              task.Messages?.[0]?.Message ??
+            const messages = task.Messages ?? {};
+            const msg = (Array.isArray(messages) ? messages[0]?.Message : messages.Message) ??
               'BMC 未接受虚拟介质连接';
             throw new RedfishError(`挂载失败：${msg}`, 400);
           }

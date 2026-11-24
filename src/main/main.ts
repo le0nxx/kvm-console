@@ -38,8 +38,7 @@ import { hostCount, localSubnets, scanSubnet } from './scanner';
 import { ensureDellLicense, installLicenseFile } from './dell-license';
 import { VncBridge } from './vnc';
 import { runBmcTool, toolsAvailable } from './tools';
-import { RedfishClient } from './redfish';
-import type { KvmSession } from './session';
+import { RedfishClient, type RedfishCollection } from './redfish';
 
 const ARGS = process.argv.slice(1);
 
@@ -81,7 +80,15 @@ let manager: SessionManager;
 let media: MediaService;
 const localMedia = new Map<string, string>();
 let panelView: WebContentsView | null = null;
-let panelState: { side?: string; panel?: string; targets?: string[]; prefill?: any } | null = null;
+
+/** Dock/side panel request coming from the renderer. */
+interface PanelRequest {
+  side?: string;
+  panel?: string;
+  targets?: string[];
+  prefill?: Record<string, string | number | undefined>;
+}
+let panelState: PanelRequest | null = null;
 let panelVisible = false;
 let vncBridge: VncBridge;
 let mock: MockBmc | undefined;
@@ -225,7 +232,7 @@ function focusPanelIfOpen(): void {
   panelView.webContents.focus();
 }
 
-function setPanelState(next: { side?: string; panel?: string; targets?: string[]; prefill?: any } | null): void {
+function setPanelState(next: PanelRequest | null): void {
   panelState = next;
   if (!next) {
     if (panelView && !panelView.webContents.isDestroyed()) {
@@ -430,11 +437,6 @@ function applyLayout(): void {
   }
 }
 
-function focusIndex(index: number): void {
-  const session = manager.order()[index];
-  if (session) setMode('focus', session.id);
-}
-
 let shortcutBindings: Record<string, string> = defaultBindings();
 let shortcutCapture = false;
 
@@ -576,14 +578,6 @@ function handleConfiguredShortcut(event: Electron.Event, input: Electron.Input):
   return false;
 }
 
-function cycleFocus(delta: number): void {
-  const sessions = manager.order();
-  if (!sessions.length) return;
-  const current = sessions.findIndex((s) => s.id === focusId);
-  const next = (current + delta + sessions.length) % sessions.length;
-  setMode('focus', sessions[next].id);
-}
-
 function isBrowserShortcut(input: Electron.Input): boolean {
   const key = (input.key ?? '').toLowerCase();
   const ctrl = input.control;
@@ -601,9 +595,7 @@ function isBrowserShortcut(input: Electron.Input): boolean {
 function wireShortcuts(wc: WebContents): void {
   if (wired.has(wc)) return;
   wired.add(wc);
-  let forwardUntil = 0;
   wc.on('before-input-event', (event, input) => {
-    if (Date.now() < forwardUntil) return;
     if (wc !== shellView?.webContents) {
       debugShortcut({ src: 'input', type: input.type, key: input.key, code: input.code, control: input.control, shift: input.shift, alt: input.alt, meta: input.meta });
     }
@@ -615,7 +607,6 @@ function wireShortcuts(wc: WebContents): void {
     // way, but still deliver the key to the KVM page.
     if (isBrowserShortcut(input)) {
       event.preventDefault();
-      const isShell = shellView && wc === shellView.webContents;
       // Do not synthesize the key back into the page. Doing so duplicated
       // modifier/key state in Dell's viewer and produced stray ESC sequences
       // (e.g. ^[1) in the guest console.
@@ -640,9 +631,6 @@ function wireShortcuts(wc: WebContents): void {
       }
     }
     if (input.type !== 'keyDown') return;
-    const code = input.code ?? '';
-    const key = (input.key ?? '').toLowerCase();
-
   });
 }
 
@@ -801,7 +789,7 @@ async function createWindow(): Promise<void> {
   installAccelerators();
 
   if (SMOKE) {
-    shellView.webContents.on('console-message', (event: any) => {
+    shellView.webContents.on('console-message', (event: Electron.Event & { message?: string }) => {
       console.log('[renderer]', event?.message ?? event);
     });
     shellView.webContents.on('preload-error', (_e, p, error) => {
@@ -835,16 +823,21 @@ async function bootstrapDevice(id: string): Promise<void> {
   try {
     const client = new RedfishClient(`${device.scheme}://${device.host}:${device.port}`, device.username, password);
     if (await client.available()) {
-      const root = await client.getJson('/redfish/v1');
+      const root = await client.getJson<{ Vendor?: string; Product?: string }>('/redfish/v1');
       if (vendor === 'generic' && /dell|idrac|poweredge/i.test(`${root?.Vendor ?? ''} ${root?.Product ?? ''}`)) {
         vendor = 'dell';
         store.updateMeta(id, { vendor });
         manager.get(id)?.patchDevice({ vendor });
       }
-      const systems = await client.getJson('/redfish/v1/Systems');
-      const member = systems?.Members?.[0]?.['@odata.id'];
-      if (member) {
-        const sys = await client.getJson(member);
+      const systems = await client.getJson<RedfishCollection>('/redfish/v1/Systems');
+      const firstMember = systems?.Members?.[0]?.['@odata.id'];
+      if (typeof firstMember === 'string') {
+        interface DellSystemInfo {
+          Model?: string;
+          SerialNumber?: string;
+          Oem?: { Dell?: { DellSystem?: { ChassisServiceTag?: string } } };
+        }
+        const sys = await client.getJson<DellSystemInfo>(firstMember);
         // Dell exposes the service tag (what admins actually use) under OEM;
         // SerialNumber is the chassis serial, which looks "wrong" to users.
         const dellOem = sys?.Oem?.Dell?.DellSystem;
@@ -1118,7 +1111,7 @@ function registerIpc(): void {
     return true;
   });
 
-  ipcMain.handle('ui:panel', (_e, next: { side?: string; panel?: string; targets?: string[]; prefill?: any } | null) => {
+  ipcMain.handle('ui:panel', (_e, next: PanelRequest | null) => {
     setPanelState(next);
     return true;
   });
@@ -1481,7 +1474,7 @@ async function reportI18nMisses(tag: string, contents: Electron.WebContents): Pr
 
 async function runSmoke(): Promise<void> {
   const started = Date.now();
-  const result: any = { demo: DEMO, startedAt: new Date().toISOString() };
+  const result: Record<string, unknown> = { demo: DEMO, startedAt: new Date().toISOString() };
   const guard = setTimeout(() => {
     result.error = 'smoke timeout';
     fs.mkdirSync(ARTIFACTS, { recursive: true });

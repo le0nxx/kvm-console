@@ -1,6 +1,6 @@
 import net from 'node:net';
 import type { Device } from './types';
-import { RedfishClient } from './redfish';
+import { RedfishClient, type RedfishErrorBody } from './redfish';
 
 export interface VncEnableResult {
   ok: boolean;
@@ -40,9 +40,10 @@ export async function ensureHuaweiVnc(
       etag ? { 'If-Match': String(etag) } : undefined,
     );
     if (res.status >= 400) {
+      const body = res.json as RedfishErrorBody | null;
       const msg =
-        res.json?.error?.['@Message.ExtendedInfo']?.[0]?.Message ??
-        res.json?.['@Message.ExtendedInfo']?.[0]?.Message ??
+        body?.error?.['@Message.ExtendedInfo']?.[0]?.Message ??
+        body?.['@Message.ExtendedInfo']?.[0]?.Message ??
         `HTTP ${res.status}`;
       return { ok: false, port: 5900, message: msg };
     }

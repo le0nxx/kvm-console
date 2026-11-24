@@ -114,7 +114,7 @@ export function launchKvmScript(): string {
       return all[0] || null;
     };
 
-    let el = pick(/^start\s+(the\s+)?virtual\s+console$/i) || pick(KVM);
+    let el = pick(/^start\\s+(the\\s+)?virtual\\s+console$/i) || pick(KVM);
     let viaMenu = false;
     if (!el) {
       const menu = pick(MENU);
@@ -224,7 +224,7 @@ const __resolveLogin = () => {
   }
   const btn = [...document.querySelectorAll('button,input[type=submit],input[type=button],a,[role=button],.el-button')]
     .filter(__vis)
-    .filter((b) => /登录|登 录|登陆|sign\s*in|log\s*in|logon|submit/i.test(__text(b)))[0] || null;
+    .filter((b) => /登录|登 录|登陆|sign\\s*in|log\\s*in|logon|submit/i.test(__text(b)))[0] || null;
   return { pw, user, btn };
 };
 `;

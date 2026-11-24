@@ -16,8 +16,6 @@ const STATE_LABEL = {
   error: '连接失败',
 };
 
-const MODES = ['grid', 'focus'];
-
 let state = null;
 let scan = null;
 let mediaFile = null;
@@ -33,12 +31,11 @@ if (PANEL_MODE) document.body.classList.add('panel-mode');
 let tabsDragging = false;
 let launcherQuery = '';
 let launcherSel = 0;
-let prevMode = null;
 let lastGridKey = '';
 let toastTimer = null;
 let landingDone = false;
 let lastStates = new Map();
-let pickedIps = new Set();
+const pickedIps = new Set();
 
 const THEME_KEY = 'kvm-theme';
 let themeMode = localStorage.getItem(THEME_KEY) || 'auto';
@@ -63,7 +60,7 @@ function cycleTheme() {
 }
 let connectPrefill = null;
 let pendingSerial = '';
-let lastLicense = new Map();
+const lastLicense = new Map();
 
 const BUILTIN_CREDS = [
   { u: 'Administrator', p: 'Admin@9000', label: '华为 / 超聚变' },
@@ -1450,7 +1447,6 @@ async function sendDockText(text) {
   if (!text) return toast('先输入或粘贴要发送的文本', 'err');
   let ok = 0;
   for (const id of ids) {
-    // eslint-disable-next-line no-await-in-loop
     if (await api.typeText(id, text)) ok += 1;
     await new Promise((r) => setTimeout(r, 120));
   }
@@ -1701,7 +1697,6 @@ function bindSheets() {
     for (const id of ids) {
       const session = sessions().find((s) => s.id === id);
       out.textContent += `\n[${session?.host || id}]\n`;
-      // eslint-disable-next-line no-await-in-loop
       const res = await api.runTool(id, tool, command);
       out.textContent += (res?.output || res?.error || t('(无输出)')) + '\n';
       if (res?.ok) ok += 1;
@@ -1731,7 +1726,6 @@ function bindSheets() {
     const keys = btn.dataset.combo.split(',');
     let ok = 0;
     for (const id of ids) {
-      // eslint-disable-next-line no-await-in-loop
       if (await api.combo(id, keys)) ok += 1;
       await new Promise((r) => setTimeout(r, 80));
     }
@@ -1751,7 +1745,6 @@ function bindSheets() {
     let ok = 0;
     let firstError = '';
     for (const id of ids) {
-      // eslint-disable-next-line no-await-in-loop
       const res = await api.mount(id, mediaFile, el('dock-boot').checked);
       if (res.ok) ok += 1;
       else if (!firstError) firstError = res.message;
@@ -1765,7 +1758,6 @@ function bindSheets() {
     if (!ids.length) return toast('先勾选至少一台服务器', 'err');
     let ok = 0;
     for (const id of ids) {
-      // eslint-disable-next-line no-await-in-loop
       const res = await api.eject(id);
       if (res.ok) ok += 1;
       await new Promise((r) => setTimeout(r, 80));
@@ -1795,8 +1787,7 @@ function bindSheets() {
     showActionConfirm('重连', 'Reconnect', ids, async () => {
       let ok = 0;
       for (const id of ids) {
-        // eslint-disable-next-line no-await-in-loop
-        if (await api.reconnect(id)) ok += 1;
+          if (await api.reconnect(id)) ok += 1;
         await new Promise((r) => setTimeout(r, 120));
       }
       toast(`已重连 ${ok}/${ids.length} 台`, ok === ids.length ? 'ok' : 'err');
@@ -1809,7 +1800,6 @@ function bindSheets() {
     if (!confirm(t('将清除 {n} 台服务器在本机保存的凭据、Cookie 和连接缓存，确定继续？', { n: ids.length }))) return;
     let ok = 0;
     for (const id of ids) {
-      // eslint-disable-next-line no-await-in-loop
       if (await api.resetConnection(id)) ok += 1;
     }
     toast(`已重置 ${ok}/${ids.length} 台`, ok === ids.length ? 'ok' : 'err');
@@ -1828,8 +1818,7 @@ function bindSheets() {
       let ok = 0;
       let firstError = '';
       for (const id of ids) {
-        // eslint-disable-next-line no-await-in-loop
-        const res = await api.power(id, action);
+          const res = await api.power(id, action);
         if (res.ok) ok += 1;
         else if (!firstError) firstError = res.message;
         await new Promise((r) => setTimeout(r, 120));

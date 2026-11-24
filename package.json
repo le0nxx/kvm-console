@@ -10,6 +10,9 @@
     "demo": "npm run build && node scripts/launch.js --demo",
     "smoke": "npm run build && node scripts/launch.js --demo --smoke --soft-render",
     "test": "npm run build && node --test test/*.test.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "check": "npm run lint && npm test",
     "postinstall": "node scripts/ensure-electron.js",
     "prestart": "node scripts/ensure-electron.js",
     "predemo": "node scripts/ensure-electron.js",
@@ -18,11 +21,15 @@
     "dist:win": "npm run build && electron-builder --win nsis portable"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.18.2",
     "electron": "^45.3.3",
     "electron-builder": "^26.18.0",
-    "typescript": "^5.6.0"
+    "eslint": "^9.39.5",
+    "globals": "^15.15.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.74.0"
   },
   "dependencies": {
     "@novnc/novnc": "^1.7.0",

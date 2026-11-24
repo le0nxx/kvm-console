@@ -1,14 +1,13 @@
 import { app, BaseWindow, WebContentsView, type BrowserWindow } from 'electron';
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import type { Device, DownloadEvent, Rect, SessionSnapshot, SessionState } from './types';
 import { VENDORS } from './store';
 import { clearDellSessions } from './dell-session';
 import { ensureDellVnc } from './dell-vnc';
-import { ensureHuaweiVnc } from './huawei-vnc';
-import { RedfishClient } from './redfish';
+import { RedfishClient, type RedfishCollection } from './redfish';
 import type { VncBridge } from './vnc';
-import crypto from 'node:crypto';
 import {
   consentScript,
   dismissDialogScript,
@@ -31,6 +30,71 @@ import {
 } from './scripts';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** Resolves true when a TCP port accepts a connection within `timeoutMs`. */
+function tcpOpen(host: string, port: number, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = net.connect({ host, port });
+    const done = (open: boolean) => {
+      sock.destroy();
+      resolve(open);
+    };
+    sock.setTimeout(timeoutMs, () => done(false));
+    sock.on('connect', () => done(true));
+    sock.on('error', () => done(false));
+  });
+}
+
+/** Shapes returned by the injected page probes; the data comes from vendor pages. */
+interface LoginProbe {
+  hasPassword?: boolean;
+  title?: string;
+  url?: string;
+  locked?: boolean;
+  forceChange?: boolean;
+  ready?: string;
+}
+
+interface FrameProbe {
+  ok?: boolean;
+  kind?: string;
+  w?: number;
+  h?: number;
+}
+
+interface HealthProbe {
+  timeout?: boolean;
+  hasPassword?: boolean;
+}
+
+interface MediaPanelResult {
+  ok?: boolean;
+  label?: string;
+}
+
+interface VncDomInfo {
+  text?: string;
+  inputs?: string[];
+  switches?: Array<{ id?: string; cls?: string }>;
+}
+
+interface PrepareLoginResult {
+  ok?: boolean;
+  hasUser?: boolean;
+}
+
+interface FillStateResult {
+  pw?: boolean;
+  user?: boolean;
+}
+
+interface ClickResult {
+  ok?: boolean;
+}
+
+interface IbmcInfo {
+  Attributes?: Record<string, unknown>;
+}
 
 /**
  * Wait for a loading page to settle. Electron's own WebContents.executeJavaScript
@@ -96,18 +160,15 @@ export class KvmSession {
   readonly view: WebContentsView;
   webView: WebContentsView | null = null;
   webOpen = false;
-  private lastWebOpen = false;
   state: SessionState = 'idle';
   detail = '';
   canvas?: { w: number; h: number };
 
   private win: BaseWindow;
-  private zoom = 1;
   private fitTimer?: NodeJS.Timeout;
   private lastFitW = 0;
   private lastFitH = 0;
   private lastRect?: Rect;
-  private attached = false;
   private loginUser = '';
   private loginPass = '';
   private limitRetried = false;
@@ -119,7 +180,6 @@ export class KvmSession {
   private downloadHandler?: (_e: Electron.Event, item: Electron.DownloadItem) => void;
   private manualTimer?: NodeJS.Timeout;
   private identityLearned = false;
-  private lastVisible?: boolean;
   private lastBounds?: Rect;
   private hiddenBounds?: Rect;
   private password: string;
@@ -159,7 +219,6 @@ export class KvmSession {
       /* older electron */
     }
     win.contentView.addChildView(this.view);
-    this.attached = true;
     this.setVisible(false);
     this.wireTransientHandlers();
   }
@@ -203,7 +262,7 @@ export class KvmSession {
         /* frame may be gone */
       }
     });
-    wc.on('console-message', (event: any) => {
+    wc.on('console-message', (event: Electron.Event & { message?: string }) => {
       const text = event?.message;
       if (typeof text !== 'string') return;
       debugSession({ event: 'console', id: this.id, text: text.slice(0, 500) });
@@ -375,7 +434,8 @@ export class KvmSession {
         clearTimeout(timer);
         wc.off('did-finish-load', onLoad);
         wc.off('did-fail-load', onFail);
-        err ? reject(err) : resolve();
+        if (err) reject(err);
+        else resolve();
       };
       const onLoad = () => done();
       const onFail = (_e: unknown, code: number, desc: string, _u: string, isMainFrame: boolean) => {
@@ -451,7 +511,6 @@ export class KvmSession {
       await this.load(this.baseUrl());
 
       this.setState('login', '正在自动登录');
-      const tLogin = Date.now();
       const login = await this.autoLogin();
       debugSession({ event: 'auto-login', id: this.id, result: login });
       if (login === 'manual') {
@@ -535,7 +594,7 @@ export class KvmSession {
           return;
         }
         const tail = await this.run<string>('(document.body.innerText || "").slice(-260)', 2500);
-        console.log('[vnc] page tail', JSON.stringify(tail));
+        debugSession({ event: 'vnc-page-tail', id: this.id, tail });
         this.device.vnc = { enabled: false, port: result.port, verifiedAt: Date.now() };
         this.hooks.onMeta?.(this.id, { vnc: this.device.vnc });
         this.detail = 'VNC 已开启，但控制台连接失败（密码可能被改过或会话已满）';
@@ -559,23 +618,25 @@ export class KvmSession {
     }
   }
 
-  private framesInPage(): any[] {
-    const root: any = this.view.webContents.mainFrame;
-    const out: any[] = [];
+  private framesInPage(): Electron.WebFrameMain[] {
     try {
-      const subtree = typeof root.framesInSubtree === 'function' ? root.framesInSubtree : null;
-      if (subtree) out.push(...subtree);
-      else out.push(root, ...(root.frames ?? []));
+      return [...this.view.webContents.mainFrame.framesInSubtree];
     } catch {
-      out.push(root);
+      return [this.view.webContents.mainFrame];
     }
-    return out;
   }
 
-  private async frameExec(frame: any, code: string, timeoutMs = 2500): Promise<any> {
+  private async frameExec<T = unknown>(
+    frame: Electron.WebFrameMain,
+    code: string,
+    timeoutMs = 2500,
+  ): Promise<T | null> {
     try {
-      if (typeof frame.isDestroyed === 'function' && frame.isDestroyed()) return null;
-      return await Promise.race([frame.executeJavaScript(code, true), sleep(timeoutMs).then(() => null)]);
+      if (frame.isDestroyed()) return null;
+      return await Promise.race<T | null>([
+        frame.executeJavaScript(code, true) as Promise<T>,
+        sleep(timeoutMs).then(() => null),
+      ]);
     } catch {
       return null;
     }
@@ -607,7 +668,7 @@ export class KvmSession {
       );
       if (!found) continue;
 
-      const prepared = await this.frameExec(frame, prepareLoginScript());
+      const prepared = await this.frameExec<PrepareLoginResult>(frame, prepareLoginScript());
       if (!prepared || !prepared.ok) continue;
 
       try {
@@ -623,9 +684,9 @@ export class KvmSession {
         wc.insertText(this.loginPass);
         await sleep(150);
 
-        let filled = await this.frameExec(frame, filledStateScript());
+        let filled = await this.frameExec<FillStateResult>(frame, filledStateScript());
         if (!filled || !filled.pw || !filled.user) {
-          filled = await this.frameExec(frame, fallbackFillScript(this.loginUser, this.loginPass));
+          filled = await this.frameExec<FillStateResult>(frame, fallbackFillScript(this.loginUser, this.loginPass));
           await sleep(150);
         }
         if (!filled || !filled.pw) return 'unfilled';
@@ -634,7 +695,7 @@ export class KvmSession {
         await this.frameExec(frame, submitLoginScript());
         return 'submitted';
       } catch {
-        const filled = await this.frameExec(frame, fallbackFillScript(this.loginUser, this.loginPass));
+        const filled = await this.frameExec<FillStateResult>(frame, fallbackFillScript(this.loginUser, this.loginPass));
         if (filled && filled.pw) {
           await this.frameExec(frame, submitLoginScript());
           return 'submitted';
@@ -663,7 +724,7 @@ export class KvmSession {
   }
 
   private async autoLogin(): Promise<'ok' | 'manual'> {
-    const probe = await this.run<any>(probeScript());
+    const probe = await this.run<LoginProbe>(probeScript());
     if (!probe) {
       this.detail = '无法读取登录页';
       return 'manual';
@@ -708,7 +769,7 @@ export class KvmSession {
     // attempt only, never a brute-force loop.
     // Re-read the title: Angular/iBMC sets <title> after bootstrap, so the
     // value captured right after load is often empty.
-    const titled = await this.run<any>(probeScript(), 4000);
+    const titled = await this.run<LoginProbe>(probeScript(), 4000);
     const creds = this.resolveCredentials(String(titled?.title || probe.title || ''));
     this.loginUser = creds.username;
     this.loginPass = creds.password;
@@ -761,45 +822,9 @@ export class KvmSession {
     return 'manual';
   }
 
-  private async dumpDiagnostics(tag: string): Promise<void> {
-    try {
-      const href = await this.run<string>('location.href', 2000);
-      const title = await this.run<string>('document.title', 2000);
-      const text = await this.run<string>('(document.body && document.body.innerText || "").slice(0, 3000)', 3000);
-      const buttons = await this.run<string[]>(
-        `[...document.querySelectorAll('button,a,[role=button]')].map((e) => ((e.innerText || '') + '').trim()).filter(Boolean).slice(0, 80)`,
-        3000,
-      );
-      const dir = path.join(process.cwd(), 'artifacts');
-      fs.mkdirSync(dir, { recursive: true });
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const base = `${tag}-${this.device.host}-${stamp}`;
-      fs.writeFileSync(
-        path.join(dir, `${base}.txt`),
-        JSON.stringify({ href, title, text, buttons, state: this.state, detail: this.detail }, null, 1),
-        'utf8',
-      );
-      const img = await this.view.webContents.capturePage();
-      if (!img.isEmpty()) fs.writeFileSync(path.join(dir, `${base}.png`), img.toPNG());
-    } catch {
-      /* best effort */
-    }
-  }
-
   private async probeVncPort(): Promise<number | undefined> {
-    const net = await import('node:net');
     for (const port of [5901, 5900, 5902, 5903]) {
-      const open = await new Promise<boolean>((resolve) => {
-        const sock = net.connect({ host: this.device.host, port });
-        const done = (v: boolean) => {
-          sock.destroy();
-          resolve(v);
-        };
-        sock.setTimeout(900, () => done(false));
-        sock.on('connect', () => done(true));
-        sock.on('error', () => done(false));
-      });
-      if (open) return port;
+      if (await tcpOpen(this.device.host, port, 900)) return port;
     }
     return undefined;
   }
@@ -842,8 +867,6 @@ export class KvmSession {
             this.view.setBounds(this.hiddenBounds);
             this.view.setVisible(false);
             this.lastBounds = this.hiddenBounds;
-            this.lastVisible = false;
-            const t0 = Date.now();
             await this.load(url);
             this.setState('kvm', '正在连接 iDRAC 控制台…');
             for (let i = 0; i < 80; i++) {
@@ -917,7 +940,6 @@ export class KvmSession {
       this.view.setBounds(this.hiddenBounds);
       this.view.setVisible(false);
       this.lastBounds = this.hiddenBounds;
-      this.lastVisible = false;
       await this.load(url);
       await sleep(300);
       this.canvas = undefined;
@@ -938,7 +960,6 @@ export class KvmSession {
     this.view.setBounds(this.hiddenBounds);
     this.view.setVisible(false);
     this.lastBounds = this.hiddenBounds;
-    this.lastVisible = false;
     await this.load(url);
     for (let i = 0; i < 30; i++) {
       const st = await this.run<string>('document.body.dataset.state || ""', 1500);
@@ -1037,11 +1058,11 @@ export class KvmSession {
 
     if (saved !== 'saved') {
       const route = await this.run<string>('location.hash || location.pathname', 1500);
-      const dom = await this.run<any>(
+      const dom = await this.run<VncDomInfo>(
         `(() => ({ text: (document.body.innerText || '').slice(0, 220), inputs: [...document.querySelectorAll('input')].map((i) => i.id).slice(0, 12), switches: [...document.querySelectorAll('a.ti3-switch')].map((a) => ({ id: a.id, cls: a.className })) }))()`,
         2500,
       );
-      console.log('[vnc] dom', JSON.stringify(dom));
+      debugSession({ event: 'vnc-dom', id: this.id, dom });
       return {
         ok: false,
         port: 5900,
@@ -1052,16 +1073,8 @@ export class KvmSession {
   }
 
   private async waitTcp(port: number): Promise<{ ok: boolean; port: number; message: string }> {
-    const net = await import('node:net');
     for (let i = 0; i < 25; i++) {
-      const open = await new Promise<boolean>((resolve) => {
-        const sock = net.connect({ host: this.device.host, port });
-        const done = (v: boolean) => { sock.destroy(); resolve(v); };
-        sock.setTimeout(1500, () => done(false));
-        sock.on('connect', () => done(true));
-        sock.on('error', () => done(false));
-      });
-      if (open) return { ok: true, port, message: '已启用 VNC' };
+      if (await tcpOpen(this.device.host, port, 1500)) return { ok: true, port, message: '已启用 VNC' };
       await sleep(700);
     }
     return { ok: false, port, message: `VNC 已配置但端口 ${port} 未监听` };
@@ -1085,11 +1098,11 @@ export class KvmSession {
     try {
       const origin = `${this.device.scheme}://${this.device.host}:${this.device.port}`;
       const client = new RedfishClient(origin, this.device.username, this.password);
-      const col = await client.getJson('/redfish/v1/SessionService/Sessions');
+      const col = await client.getJson<RedfishCollection>('/redfish/v1/SessionService/Sessions');
       let removed = 0;
       for (const member of col?.Members ?? []) {
         const path = member?.['@odata.id'];
-        if (!path) continue;
+        if (typeof path !== 'string') continue;
         const res = await client.raw('DELETE', path);
         if (res.status < 400) removed += 1;
       }
@@ -1122,11 +1135,10 @@ export class KvmSession {
       return;
     }
 
-    const probe = await this.run<any>(probeScript(), 4000);
+    const probe = await this.run<LoginProbe>(probeScript(), 4000);
     const title = String(probe?.title || '');
     const isIbmc =
       /ibmc/i.test(title) || this.device.vendor === 'huawei' || this.device.vendor === 'xfusion';
-    const isIdrac = /idrac/i.test(title) || this.device.vendor === 'dell';
 
     if (isIbmc) {
       // iBMC 3.x: /#/kvm_h5 is the HTML5 console. It is gated by two storage
@@ -1158,19 +1170,19 @@ export class KvmSession {
     const deadline = Date.now() + 20000;
     while (Date.now() < deadline) {
       for (const frame of this.framesInPage()) {
-        const started = await this.frameExec(frame, startConsoleScript(), 4000);
+        const started = await this.frameExec<ClickResult>(frame, startConsoleScript(), 4000);
         if (started && started.ok) {
           for (let k = 0; k < 20 && !this.external; k++) await sleep(500);
           if (this.external) return;
         }
       }
       for (const frame of this.framesInPage()) {
-        const clicked = await this.frameExec(frame, launchKvmScript(), 9000);
+        const clicked = await this.frameExec<ClickResult>(frame, launchKvmScript(), 9000);
         if (clicked && clicked.ok) {
           await sleep(1500);
           // iDRAC-style UIs need a second click on "Start/Launch ...".
           for (const inner of this.framesInPage()) {
-            const launched = await this.frameExec(inner, launchConsoleScript(), 4000);
+            const launched = await this.frameExec<ClickResult>(inner, launchConsoleScript(), 4000);
             if (launched && launched.ok) break;
           }
           return;
@@ -1215,7 +1227,7 @@ export class KvmSession {
 
   private async waitForFrame(): Promise<void> {
     for (let i = 0; i < 45; i++) {
-      const frame = await this.run<any>(frameProbeScript(), 4000);
+      const frame = await this.run<FrameProbe>(frameProbeScript(), 4000);
       if (frame && frame.ok) {
         this.canvas = { w: Number(frame.w), h: Number(frame.h) };
         this.setState('ready', `${frame.w}×${frame.h}`);
@@ -1255,7 +1267,7 @@ export class KvmSession {
     let serial = '';
     if (this.device.vendor === 'dell') {
       try {
-        const info = await this.run<any>(
+        const info = await this.run<IbmcInfo>(
           `fetch('/sysmgmt/2015/bmc/info').then(r => r.json()).catch(() => null)`,
           3000,
         );
@@ -1276,7 +1288,12 @@ export class KvmSession {
       );
       const targets = await client.discover();
       if (targets.system) {
-        const sys = await client.getJson(targets.system);
+        interface DellSystemInfo {
+          Model?: string;
+          SerialNumber?: string;
+          Oem?: { Dell?: { DellSystem?: { ChassisServiceTag?: string; ServiceTag?: string } } };
+        }
+        const sys = await client.getJson<DellSystemInfo>(targets.system);
         if (sys?.Model && !model) model = String(sys.Model);
         const tag = String(
           sys?.Oem?.Dell?.DellSystem?.ChassisServiceTag ||
@@ -1318,7 +1335,7 @@ export class KvmSession {
       return;
     }
     if (this.state !== 'ready') return;
-    const health = await this.run<any>(healthScript(), 5000);
+    const health = await this.run<HealthProbe>(healthScript(), 5000);
     if (!health) return;
     if (health.timeout) {
       await this.run(dismissDialogScript(), 3000);
@@ -1441,7 +1458,6 @@ export class KvmSession {
       return;
     }
     zoom = Math.max(0.15, Math.min(1.5, Math.round(zoom * 100) / 100));
-    this.zoom = zoom;
     try {
       wc.setZoomFactor(zoom);
     } catch {
@@ -1507,7 +1523,6 @@ export class KvmSession {
     const b = (rect ?? this.lastBounds ?? this.hiddenBounds) as Rect;
     const hidden = { x: 0, y: 0, width: 1, height: 1 };
     const active = this.webOpen && this.webView ? this.webView : this.view;
-    const inactive = active === this.view ? this.webView : this.view;
     try {
       // Always apply both views: stale hidden web views would otherwise cover
       // other panes after a toggle.
@@ -1518,25 +1533,6 @@ export class KvmSession {
     } catch {
       /* view may be gone during teardown */
     }
-    this.lastVisible = visible;
-  }
-
-  /** Reset guest modifier state through the RFB instance itself (works even
-   *  when the canvas is not focused). */
-  private async resetGuestKeyboard(): Promise<void> {
-    const ok = await this.run(
-      `(() => {
-        const r = window.__rfb;
-        if (!r || typeof r.sendKey !== 'function') return false;
-        const mods = [[0xffe9,'AltLeft'],[0xffe3,'ControlLeft'],[0xffe1,'ShiftLeft'],[0xffe7,'MetaLeft']];
-        for (const [ks, code] of mods) {
-          try { r.sendKey(ks, code, true); r.sendKey(ks, code, false); } catch (e) {}
-        }
-        return true;
-      })()`,
-      1500,
-    ).catch(() => undefined);
-    debugSession({ event: 'reset-keyboard', id: this.id, ok });
   }
 
   /** Force a known-up modifier state in the guest (down+up pair). */
@@ -1990,7 +1986,7 @@ export class KvmSession {
   }
 
   async openMediaPanel(): Promise<{ ok: boolean; label?: string }> {
-    const res = await this.run<any>(openMediaPanelScript(), 6000);
+    const res = await this.run<MediaPanelResult>(openMediaPanelScript(), 6000);
     return { ok: Boolean(res?.ok), label: res?.label };
   }
 
@@ -2194,7 +2190,7 @@ export class KvmSession {
           .executeJavaScript(
             `(() => {
               const nodes = [...document.querySelectorAll('button,#btLogin,input[type=submit],[role=button]')];
-              const b = nodes.find((x) => /log\s*in|登录/i.test(((x.innerText || x.value || '') + '').trim()));
+              const b = nodes.find((x) => /log\\s*in|登录/i.test(((x.innerText || x.value || '') + '').trim()));
               if (!b) return null;
               const r = b.getBoundingClientRect();
               if (r.width < 4) return null;
@@ -2224,10 +2220,10 @@ export class KvmSession {
             try {
               const origin = `${this.device.scheme}://${this.device.host}:${this.device.port}`;
               const client = new RedfishClient(origin, this.device.username, this.password);
-              const col = await client.getJson('/redfish/v1/SessionService/Sessions');
+              const col = await client.getJson<RedfishCollection>('/redfish/v1/SessionService/Sessions');
               for (const member of col?.Members ?? []) {
                 const path = member?.['@odata.id'];
-                if (path) await client.raw('DELETE', path);
+                if (typeof path === 'string') await client.raw('DELETE', path);
               }
             } catch {
               /* best effort */
@@ -2252,7 +2248,6 @@ export class KvmSession {
     const created = !this.webView;
     const view = this.ensureWebView();
     this.webOpen = !this.webOpen;
-    this.lastWebOpen = !this.webOpen;
     if (this.lastBounds) view.setBounds(this.lastBounds);
     if (this.webOpen) void this.dismissWebWarnings();
     return { view, open: this.webOpen, created };

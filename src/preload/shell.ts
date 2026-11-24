@@ -28,7 +28,7 @@ const api = {
   setMode: (mode: string, focusId?: string | null) => ipcRenderer.invoke('ui:mode', mode, focusId ?? null),
   reorder: (ids: string[]) => ipcRenderer.invoke('sessions:reorder', ids),
   setPanel: (next: { side?: string; panel?: string } | null) => ipcRenderer.invoke('ui:panel', next),
-  onPanel: (cb: (payload: any) => void) => {
+  onPanel: (cb: (payload: { dockOpen?: boolean; side?: string | null; panel?: string | null; targets?: string[]; prefill?: unknown }) => void) => {
     ipcRenderer.on('panel-state', (_e, payload) => cb(payload));
   },
   power: (id: string, action: string) => ipcRenderer.invoke('power:action', { id, action }),

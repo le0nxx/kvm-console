@@ -28,6 +28,22 @@ export function cidrFromInterface(address: string, netmask: string): string {
   return `${octets.join('.')}/${prefix}`;
 }
 
+/** OEM block of a Redfish service root, per vendor. */
+interface OemIdentity {
+  ServiceTag?: string;
+  SerialNumber?: string;
+  ProductName?: string;
+}
+
+/** Fields of `/redfish/v1` that the scanner reads back. */
+interface RedfishIdentity {
+  RedfishVersion?: string;
+  Vendor?: string;
+  Product?: string;
+  SerialNumber?: string;
+  Oem?: { Dell?: OemIdentity; Huawei?: OemIdentity; xFusion?: OemIdentity };
+}
+
 export interface LocalSubnet {
   iface: string;
   address: string;
@@ -220,7 +236,6 @@ export async function scanSubnet(
 ): Promise<ScanHost[]> {
   const hosts = hostsInCidr(cidr);
   if (!hosts.length) throw new Error(`无效网段：${cidr}`);
-  const total = hosts.length;
   const arp = await readArpTable();
 
 
@@ -254,7 +269,7 @@ export async function scanSubnet(
     try {
       const root = await httpGet(`${origin}/redfish/v1`, { accept: 'application/json' });
       host.latencyMs = root.latencyMs;
-      let identity: any = null;
+      let identity: RedfishIdentity | null = null;
       try {
         identity = JSON.parse(root.body);
       } catch {

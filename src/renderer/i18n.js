@@ -12,6 +12,7 @@
  * substring rewriting: a translation either matches a whole message or it does
  * not appear.
  */
+/* global module */
 (function () {
   const MESSAGES = {
     "多路控制台 · beta": "Multi-console · beta",
@@ -39,7 +40,6 @@
     "停止广播": "Stop broadcast",
     "未启用": "Off",
     "先勾选至少一个目标": "Select at least one target",
-    "键盘广播到所有窗格": "Broadcast keyboard to all panes",
     "连接": "Connect",
     "扫描网段": "Scan subnet",
     "历史": "History",
@@ -337,7 +337,7 @@
     "先填好用户名和密码，再存为预设": "Fill in the username and password before saving a preset",
     "从历史中删除这条记录？（不影响 BMC 本身）": "Delete this entry from history? (The BMC itself is unaffected.)",
     "将清除 {n} 台服务器在本机保存的凭据、Cookie 和连接缓存，确定继续？":
-    "This clears saved credentials, cookies and connection cache for {n} servers. Continue?"
+      "This clears saved credentials, cookies and connection cache for {n} servers. Continue?"
 };
 
   // Ideographs plus CJK punctuation (：（）「」…), so keys like "SN：" match too.

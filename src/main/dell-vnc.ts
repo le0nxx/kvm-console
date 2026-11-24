@@ -1,5 +1,5 @@
 import type { Device } from './types';
-import { RedfishClient } from './redfish';
+import { RedfishClient, type RedfishCollection, type RedfishErrorBody } from './redfish';
 
 export interface VncEnableResult {
   ok: boolean;
@@ -19,9 +19,10 @@ export async function ensureDellVnc(
   const origin = `${device.scheme}://${device.host}:${device.port}`;
   const client = new RedfishClient(origin, device.username, password);
   try {
-    const managers = await client.getJson('/redfish/v1/Managers');
-    const managerPath = managers?.Members?.[0]?.['@odata.id'] ?? '/redfish/v1/Managers/iDRAC.Embedded.1';
-    const attrs = await client.getJson(`${managerPath}/Attributes`);
+    const managers = await client.getJson<RedfishCollection>('/redfish/v1/Managers');
+    const firstManager = managers?.Members?.[0]?.['@odata.id'];
+    const managerPath = typeof firstManager === 'string' ? firstManager : '/redfish/v1/Managers/iDRAC.Embedded.1';
+    const attrs = await client.getJson<{ Attributes?: Record<string, unknown> }>(`${managerPath}/Attributes`);
     const a = attrs?.Attributes ?? {};
     const enabled = String(a['VNCServer.1.Enable'] ?? '') === 'Enabled';
     const port = Number(a['VNCServer.1.Port'] || 5901) || 5901;
@@ -35,7 +36,8 @@ export async function ensureDellVnc(
     if (res.status >= 400) {
       let message = `HTTP ${res.status}`;
       try {
-        message = res.json?.error?.['@Message.ExtendedInfo']?.[0]?.Message ?? message;
+        const body = res.json as RedfishErrorBody | null;
+        message = body?.error?.['@Message.ExtendedInfo']?.[0]?.Message ?? message;
       } catch {
         /* ignore */
       }

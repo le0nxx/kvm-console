@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Device } from './types';
-import { RedfishClient } from './redfish';
+import { RedfishClient, type RedfishCollection, type RedfishErrorBody } from './redfish';
 
 export interface LicenseCandidate {
   path: string;
@@ -83,11 +83,12 @@ function generationOf(model: string): 'iDRAC8' | 'iDRAC9' | 'iDRAC10' {
   return 'iDRAC9';
 }
 
-function errorText(res: { text: string; json: any }): string {
+function errorText(res: { text: string; json: unknown }): string {
   try {
-    const info = res.json?.error?.['@Message.ExtendedInfo']?.[0];
+    const body = res.json as RedfishErrorBody | null;
+    const info = body?.error?.['@Message.ExtendedInfo']?.[0];
     if (info?.Message) return String(info.Message);
-    if (res.json?.error?.message) return String(res.json.error.message);
+    if (body?.error?.message) return String(body.error.message);
   } catch {
     /* ignore */
   }
@@ -96,10 +97,10 @@ function errorText(res: { text: string; json: any }): string {
 
 async function deleteLicenses(client: RedfishClient): Promise<void> {
   try {
-    const list = await client.getJson('/redfish/v1/LicenseService/Licenses');
+    const list = await client.getJson<RedfishCollection>('/redfish/v1/LicenseService/Licenses');
     for (const member of list?.Members ?? []) {
       const id = member?.['@odata.id'];
-      if (id) await client.raw('DELETE', id).catch(() => undefined);
+      if (typeof id === 'string') await client.raw('DELETE', id).catch(() => undefined);
     }
   } catch {
     /* nothing to delete */
@@ -124,19 +125,19 @@ export async function ensureDellLicense(device: Device, password: string): Promi
 
   let model = '';
   try {
-    const managers = await client.getJson('/redfish/v1/Managers');
+    const managers = await client.getJson<RedfishCollection>('/redfish/v1/Managers');
     const managerPath = managers?.Members?.[0]?.['@odata.id'];
-    if (managerPath) {
-      const manager = await client.getJson(managerPath);
+    if (typeof managerPath === 'string') {
+      const manager = await client.getJson<{ Model?: string }>(managerPath);
       model = String(manager?.Model ?? '');
     }
   } catch {
     /* keep default generation */
   }
 
-  let installed: any[] = [];
+  let installed: Array<Record<string, unknown>> = [];
   try {
-    const list = await client.getJson('/redfish/v1/LicenseService/Licenses');
+    const list = await client.getJson<RedfishCollection>('/redfish/v1/LicenseService/Licenses');
     installed = list?.Members ?? [];
   } catch {
     installed = [];
@@ -146,9 +147,9 @@ export async function ensureDellLicense(device: Device, password: string): Promi
   const expired: string[] = [];
   for (const member of installed) {
     const id = member?.['@odata.id'];
-    if (!id) continue;
+    if (typeof id !== 'string') continue;
     try {
-      const detail = await client.getJson(id);
+      const detail = await client.getJson<{ ExpirationDate?: string }>(id);
       const expiry = detail?.ExpirationDate ? Date.parse(detail.ExpirationDate) : 0;
       if (expiry && expiry < Date.now()) expired.push(id);
       else hasValid = true;

@@ -1,5 +1,5 @@
 import type { Device } from './types';
-import { RedfishClient } from './redfish';
+import { RedfishClient, type RedfishCollection } from './redfish';
 
 export interface SessionCleanup {
   ok: boolean;
@@ -18,12 +18,11 @@ export async function clearDellSessions(device: Device, password: string): Promi
   const origin = `${device.scheme}://${device.host}:${device.port}`;
   const client = new RedfishClient(origin, device.username, password);
   try {
-    const collection = await client.getJson('/redfish/v1/SessionService/Sessions');
-    const members: any[] = collection?.Members ?? [];
+    const collection = await client.getJson<RedfishCollection>('/redfish/v1/SessionService/Sessions');
     let removed = 0;
-    for (const member of members) {
+    for (const member of collection?.Members ?? []) {
       const id = member?.['@odata.id'];
-      if (!id) continue;
+      if (typeof id !== 'string') continue;
       const res = await client.raw('DELETE', id);
       if (res.status >= 200 && res.status < 300) removed++;
     }
