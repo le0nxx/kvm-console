@@ -53,7 +53,7 @@ KVM Console 用**连接历史 + 网段扫描**代替设备台账，不强制命�
 ### Arch Linux
 
 ```bash
-sudo pacman -U kvm-console-2.0.11-1-x86_64.pkg.tar.zst
+sudo pacman -U kvm-console-2.3.1-1-x86_64.pkg.tar.zst
 kvm-console
 ```
 
@@ -170,7 +170,6 @@ npx electron-builder --win nsis portable
 - 戴尔 iDRAC 3.x 的旧 viewer 依赖独立弹窗，内嵌 Web KVM 可能失败；
 - 同一 BMC 的 KVM 会话数有限，多人同时打开会互相踢下线；
 - 虚拟媒体要求 BMC 能访问本机管理网 IP，注意防火墙；
-- 当前不包含固件批量升级、SOL 串口终端和 SFTP 文件传输；
 - Windows 包未签名。
 
 ## 参与贡献

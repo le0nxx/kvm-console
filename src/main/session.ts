@@ -32,6 +32,41 @@ import {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+/**
+ * Wait for a loading page to settle. Electron's own WebContents.executeJavaScript
+ * does this by attaching a `did-stop-loading` listener on every call, which piles
+ * up when a page keeps navigating (MaxListenersExceededWarning). One shared
+ * waiter per page avoids that.
+ */
+const pageReady = new WeakMap<Electron.WebContents, Promise<void>>();
+
+function whenPageReady(wc: Electron.WebContents): Promise<void> {
+  if (wc.isDestroyed() || !wc.isLoading()) return Promise.resolve();
+  let wait = pageReady.get(wc);
+  if (!wait) {
+    wait = new Promise<void>((resolve) => {
+      wc.once('did-stop-loading', () => {
+        pageReady.delete(wc);
+        resolve();
+      });
+    });
+    pageReady.set(wc, wait);
+  }
+  return wait;
+}
+
+/**
+ * Run a script in the page's main frame. Unlike WebContents.executeJavaScript
+ * this never waits for the page to load, so callers pair it with whenPageReady
+ * and their own timeout instead of registering listeners per call.
+ */
+function execInPage<T>(wc: Electron.WebContents, script: string): Promise<T> {
+  if (wc.isDestroyed()) return Promise.reject(new Error('page is gone'));
+  const frame = wc.mainFrame;
+  if (!frame) return Promise.reject(new Error('no main frame'));
+  return frame.executeJavaScript(script, true) as Promise<T>;
+}
+
 export interface SessionHooks {
   onUpdate: (session: KvmSession) => void;
   onMeta?: (id: string, patch: { vnc?: Device['vnc']; model?: string; serial?: string }) => void;
@@ -168,8 +203,8 @@ export class KvmSession {
         /* frame may be gone */
       }
     });
-    wc.on('console-message', (event: any, _level: any, message: any) => {
-      const text = typeof message === 'string' ? message : event?.message;
+    wc.on('console-message', (event: any) => {
+      const text = event?.message;
       if (typeof text !== 'string') return;
       debugSession({ event: 'console', id: this.id, text: text.slice(0, 500) });
       if (text.startsWith('__KVM_KEYDBG__')) {
@@ -317,9 +352,13 @@ export class KvmSession {
     const wc = this.view.webContents;
     if (wc.isDestroyed()) return null;
     try {
+      let timedOut = false;
       return await Promise.race<T | null>([
-        wc.executeJavaScript(script, true) as Promise<T>,
-        sleep(timeoutMs).then(() => null),
+        whenPageReady(wc).then(() => (timedOut ? null : execInPage<T>(wc, script))),
+        sleep(timeoutMs).then(() => {
+          timedOut = true;
+          return null;
+        }),
       ]);
     } catch {
       return null;
@@ -1436,25 +1475,27 @@ export class KvmSession {
     for (const v of views) {
       const wc = v.webContents;
       if (wc.isDestroyed()) continue;
-      void wc
-        .executeJavaScript(
-          `(() => {
-            let el = document.getElementById('__kvm_grid_sel');
-            if (!el) {
-              el = document.createElement('div');
-              el.id = '__kvm_grid_sel';
-              el.style.cssText = 'position:fixed;inset:0;border-radius:12px;pointer-events:none;z-index:2147483646;border:3px solid #3daee9;box-sizing:border-box;';
-              (document.body || document.documentElement).appendChild(el);
-            }
-            el.style.display = ${on ? "'block'" : "'none'"};
-            const frame = document.getElementById('__kvm_frame_border');
-            if (frame) {
-              frame.style.inset = ${on ? "'3px'" : "''"};
-              frame.style.borderRadius = ${on ? "'9px'" : "''"};
-            }
-            return true;
-          })()`,
-          true,
+      void whenPageReady(wc)
+        .then(() =>
+          execInPage(
+            wc,
+            `(() => {
+              let el = document.getElementById('__kvm_grid_sel');
+              if (!el) {
+                el = document.createElement('div');
+                el.id = '__kvm_grid_sel';
+                el.style.cssText = 'position:fixed;inset:0;border-radius:12px;pointer-events:none;z-index:2147483646;border:3px solid #3daee9;box-sizing:border-box;';
+                (document.body || document.documentElement).appendChild(el);
+              }
+              el.style.display = ${on ? "'block'" : "'none'"};
+              const frame = document.getElementById('__kvm_frame_border');
+              if (frame) {
+                frame.style.inset = ${on ? "'3px'" : "''"};
+                frame.style.borderRadius = ${on ? "'9px'" : "''"};
+              }
+              return true;
+            })()`,
+          ),
         )
         .catch(() => undefined);
     }
