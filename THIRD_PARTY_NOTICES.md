@@ -11,6 +11,21 @@ KVM Console 使用以下开源组件。各组件的版权归其作者所有。
 
 修改或分发 `src/renderer/novnc/` 下的文件时，请遵守 MPL-2.0 的源码公开要求。
 
+## ipmitool
+
+- 位置：`vendor/win-tools/ipmitool.exe`
+- 用途：Windows 版 IPMI 命令
+- 许可证：BSD-style；详见 `vendor/win-tools/IPMITOOL_COPYING.txt`
+- 项目：https://github.com/ipmitool/ipmitool
+- Windows 构建来自 Dell iDRAC Tools 安装包，附带 Cygwin 运行库（见 `CYGWIN_LICENSE.txt`）。
+
+## Dell racadm
+
+- 位置：`vendor/win-tools/racadm.exe`
+- 用途：Windows 版 iDRAC CLI
+- 版权：Dell Inc.
+- 许可：Dell iDRAC Tools EULA；仅随本应用分发，详见 `vendor/win-tools/RACADM_NOTICE.txt`。
+
 ## Electron
 
 - 用途：桌面运行时与 Chromium

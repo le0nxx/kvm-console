@@ -1,11 +1,10 @@
 # Windows BMC CLI tools
 
-Place the vendor-provided Windows binaries here before building the Windows package:
+Bundled with the Windows package and copied to `resources/tools/win/`:
 
-- `racadm.exe` — from Dell iDRAC Tools for Microsoft Windows Server
-- `ipmitool.exe` — Windows build of ipmitool
+- `racadm.exe` + `libargtable64.dll` — Dell iDRAC Tools for Windows (Dell EULA).
+- `ipmitool.exe` + Cygwin runtime DLLs — ipmitool 1.8.18 Dell package (BSD-style licence; see `IPMITOOL_COPYING.txt`).
 
-They are copied to `resources/tools/win/` by electron-builder and used by the
-Terminal panel. Dell's `racadm.exe` is proprietary; it is not redistributed by
-this repository. The MIT-licensed source of KVM Console does not include these
-binaries.
+`racadm` remains Dell proprietary software. The Windows build bundles it only
+as part of the KVM Console application; redistribution is subject to Dell's
+iDRAC Tools licence.

@@ -1,0 +1,3 @@
+racadm.exe is part of Dell iDRAC Tools for Microsoft Windows Server.
+Copyright Dell Inc. Distributed under Dell's iDRAC Tools license terms.
+It is bundled here only for use with KVM Console; see Dell's EULA.

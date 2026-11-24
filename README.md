@@ -112,14 +112,7 @@ npm run demo
 
 顶栏「终端」打开后，会沿用当前勾选的目标，选择 `racadm` 或 `ipmitool` 输入命令；命令逐台执行，输出按主机分段显示。
 
-Windows 安装包从 `resources/tools/win/` 读取 `racadm.exe` 和 `ipmitool.exe`。Dell 的 `racadm.exe` 属于厂商工具，仓库不直接分发；构建前需把授权获得的二进制放入 `vendor/win-tools/`：
-
-```text
-vendor/win-tools/racadm.exe
-vendor/win-tools/ipmitool.exe
-```
-
-Linux 开发环境使用系统 `racadm` / `ipmitool`。
+Windows 安装包已内置 `resources/tools/win/racadm.exe` 和 `ipmitool.exe`；Linux 开发环境使用系统 `racadm` / `ipmitool`。
 
 ## 数据与安全
 
