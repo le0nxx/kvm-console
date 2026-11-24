@@ -12,7 +12,7 @@
     '还没有预设': 'No presets yet', '点击填入': 'Click to fill',
     '广播': 'Broadcast', '启用广播': 'Start broadcast', '停止广播': 'Stop broadcast',
     '未启用': 'Off', '先勾选至少一个目标': 'Select at least one target', '键盘广播到所有窗格': 'Broadcast keyboard to all panes',
-    '连接': 'Connect', '扫描网段': 'Scan subnet', '历史': 'History', '虚拟镜像': 'Virtual media', '虚拟媒体': 'Virtual Media', '终端': 'Terminal', '下载': 'Downloads', '打开目录': 'Open folder', '清空': 'Clear', '还没有下载': 'No downloads yet',
+    '连接': 'Connect', '扫描网段': 'Scan subnet', '历史': 'History', '虚拟镜像': 'Virtual media', '虚拟媒体': 'Virtual Media', '终端': 'Terminal', '执行': 'Run', '清屏': 'Clear', '输入命令，例如 getsysinfo / mc info': 'Enter a command, e.g. getsysinfo / mc info', '下载': 'Downloads', '打开目录': 'Open folder', '清空': 'Clear', '还没有下载': 'No downloads yet',
     '文本/快捷键': 'Text / Keys', '电源': 'Power', '全部重连': 'Reconnect all', '快速切换': 'Quick Connect', '快速连接': 'Quick Connect',
     '快捷键': 'Shortcuts', '设置': 'Settings', '自动': 'Auto', '日间': 'Light', '夜间': 'Dark',
     '跟随系统': 'System', '连接一台 BMC': 'Connect a BMC', '连接 BMC': 'Connect BMC',
@@ -86,7 +86,7 @@
     '上一个标签': 'Previous tab', '下一个标签': 'Next tab', '关闭当前标签': 'Close current tab',
     '新建连接': 'New connection', '退出应用': 'Quit application', '切换到网格': 'Switch to grid',
     '聚焦当前标签': 'Focus current tab', '扫描网段': 'Scan subnet', '历史记录': 'History',
-    '虚拟镜像': 'Virtual media', '虚拟媒体': 'Virtual Media', '终端': 'Terminal', '下载': 'Downloads', '打开目录': 'Open folder', '清空': 'Clear', '还没有下载': 'No downloads yet', '文本 / 快捷键': 'Text / Shortcuts', '电源控制': 'Power control',
+    '虚拟镜像': 'Virtual media', '虚拟媒体': 'Virtual Media', '终端': 'Terminal', '执行': 'Run', '清屏': 'Clear', '输入命令，例如 getsysinfo / mc info': 'Enter a command, e.g. getsysinfo / mc info', '下载': 'Downloads', '打开目录': 'Open folder', '清空': 'Clear', '还没有下载': 'No downloads yet', '文本 / 快捷键': 'Text / Shortcuts', '电源控制': 'Power control',
     '快速切换': 'Quick Connect', '快速连接': 'Quick Connect', '全部重连': 'Reconnect all', '切换主题': 'Toggle theme',
     '恢复默认': 'Reset defaults', '未绑定': 'Unbound',
     'English': 'English', '跟随系统语言': 'System language',
@@ -106,7 +106,7 @@
     [/^从未$/, 'never'],
   ];
   const langMode = () => localStorage.getItem('kvm-lang') || 'auto';
-  const PRESERVE = new Set(['xFusion', 'iDRAC', 'iBMC', 'macOS', 'KVM', 'VNC', 'SN', 'IPMI', 'HTTP', 'HTTPS', 'Redfish', 'NMI', 'USB']);
+  const PRESERVE = new Set(['racadm', 'ipmitool', 'getsysinfo', 'mc info', 'xFusion', 'iDRAC', 'iBMC', 'macOS', 'KVM', 'VNC', 'SN', 'IPMI', 'HTTP', 'HTTPS', 'Redfish', 'NMI', 'USB']);
   const titleCase = (text) => {
     const s = text.trim();
     if (!s || s.length > 48 || /[.!?]\s*$/.test(s)) return text;

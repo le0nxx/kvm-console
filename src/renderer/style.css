@@ -1288,3 +1288,16 @@ html[data-theme="light"] .pill.cred-unknown { color: #9a6700; border-color: #e3c
 #dock-panel-terminal .terminal-bar input { height: 32px; }
 #dock-panel-terminal .terminal-bar select { height: 32px; }
 #dock-panel-terminal #term-run { height: 32px; }
+
+/* terminal action buttons: same size and alignment */
+#dock-panel-terminal .terminal-bar .btn {
+  height: 32px;
+  min-width: 64px;
+  padding: 0 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+#dock-panel-terminal .terminal-bar select { width: 120px; }
