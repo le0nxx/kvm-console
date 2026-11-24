@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>KVM Console 2.3.2 使用说明</title>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>KVM Console 2.3.3 使用说明</title>
 <style>body{max-width:900px;margin:32px auto;padding:0 20px;font:14px/1.75 "Noto Sans","Noto Sans SC",sans-serif;color:#232627;background:#fcfcfc}h1{font-size:24px}h2{margin-top:28px;border-bottom:1px solid #cdd4d9;padding-bottom:4px}code{background:#eff0f1;padding:2px 5px;border-radius:3px}li{margin:3px 0}</style></head><body>
-<h1>KVM Console 2.3.2 使用说明</h1>
+<h1>KVM Console 2.3.3 使用说明</h1>
 <p>多路网页 KVM 控制台，支持华为/超聚变 iBMC、戴尔 iDRAC、浪潮 ISBMC 及通用 BMC。</p>
-<h2>安装</h2><p>Linux：<code>sudo pacman -U kvm-console-2.3.2-1-x86_64.pkg.tar.zst</code></p><p>Windows：运行 setup 安装版或 portable 免安装版，安装器可选择是否创建桌面/开始菜单快捷方式。</p>
+<h2>安装</h2><p>Linux：<code>sudo pacman -U kvm-console-2.3.3-1-x86_64.pkg.tar.zst</code></p><p>Windows：运行 setup 安装版或 portable 免安装版，安装器可选择是否创建桌面/开始菜单快捷方式。</p>
 <h2>连接</h2><p>顶栏「连接」填写 BMC 地址、用户名、密码。自动模式下戴尔走 Web KVM，华为/超聚变走 HTML5。需要手动 VNC 时在连接方式中选择 VNC。</p>
 <h2>扫描</h2><p>顶栏「扫描网段」，输入 CIDR 后回车。结果逐台出现，凭据状态分为未知、默认、已保存、不可用。戴尔可在未登录时读取型号和 Service Tag。</p>
 <h2>窗格/聚焦</h2><p>单台设备自动聚焦；网格模式下 Ctrl+Shift+←/→ 移动选中窗格并显示蓝色外框，聚焦模式下切换会话。</p>
@@ -12,5 +12,5 @@
 <h2>CLI 终端</h2><p>顶栏「终端」沿用当前勾选目标，选择 <code>racadm</code> 或 <code>ipmitool</code> 批量执行命令，输出按主机分段显示。Windows 安装包已内置两个工具。</p>
 <h2>下载</h2><p>下载统一保存到系统下载目录下的 <code>KVM-Console</code> 文件夹，顶栏圆环显示进度，点击打开下载管理。</p>
 <h2>常见问题</h2><p>戴尔 iDRAC 3.x 的 Web 查看器依赖独立弹窗，内嵌失败时请升级固件或使用 VNC；华为 JNLP 会被阻止，优先使用 HTML5；快捷键只在应用前台生效。</p>
-<hr><p>版本 2.3.2 · 2026-11-24</p>
+<hr><p>版本 2.3.3 · 2026-11-24</p>
 </body></html>

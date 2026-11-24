@@ -53,7 +53,7 @@ KVM Console 用**连接历史 + 网段扫描**代替设备台账，不强制命�
 ### Arch Linux
 
 ```bash
-sudo pacman -U kvm-console-2.3.2-1-x86_64.pkg.tar.zst
+sudo pacman -U kvm-console-2.3.3-1-x86_64.pkg.tar.zst
 kvm-console
 ```
 
@@ -147,6 +147,14 @@ npm run smoke     # 无头快速验证
 
 TypeScript 开了 `noUnusedLocals` / `noUnusedParameters` / `noImplicitReturns`，
 新增代码请保持 `npm run check` 无输出。
+
+排障日志默认关闭（每条都会同步写盘，影响输入延迟），需要时用环境变量打开：
+
+```bash
+KVM_DEBUG=1 npm start            # 会话/快捷键轨迹 → debug.log、shortcut-debug.log
+KVM_DEBUG_CONSOLE=1 npm start    # 另外记录 BMC 页面的 console 输出
+KVM_DEBUG_VNC=1 npm start        # VNC 逐帧流量 → wire-debug.log
+```
 
 项目结构：
 

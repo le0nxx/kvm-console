@@ -41,15 +41,23 @@ const THEME_KEY = 'kvm-theme';
 let themeMode = localStorage.getItem(THEME_KEY) || 'auto';
 const themeMedia = window.matchMedia('(prefers-color-scheme: light)');
 
+let appliedTheme = '';
+let appliedCols = 0;
+let appliedRows = 0;
+
 function applyTheme() {
   const systemLight =
     state?.app && typeof state.app.nativeDark === 'boolean'
       ? !state.app.nativeDark
       : themeMedia.matches;
   const light = themeMode === 'light' || (themeMode === 'auto' && systemLight);
-  document.documentElement.dataset.theme = light ? 'light' : 'dark';
+  const next = light ? 'light' : 'dark';
+  if (next !== appliedTheme) {
+    appliedTheme = next;
+    document.documentElement.dataset.theme = next;
+  }
   const select = el('set-theme');
-  if (select) select.value = themeMode;
+  if (select && select.value !== themeMode) select.value = themeMode;
 }
 
 function cycleTheme() {
@@ -96,6 +104,8 @@ function writeCredSlots(slots) {
 }
 
 function renderPresets() {
+  const slotsSig = JSON.stringify(credSlots());
+  if (!changed('presets', `${slotsSig}|${en() ? 'en' : 'zh'}`)) return;
   const builtin = BUILTIN_CREDS.map(
     (c) =>
       `<span class="preset-chip" data-u="${esc(c.u)}" data-p="${esc(c.p)}" title="${esc(c.label)}">${esc(c.u)} : ${esc(c.p)}</span>`,
@@ -204,6 +214,29 @@ function savePreset(prefix) {
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+/**
+ * Snapshots arrive every 5 s even when nothing changed. Rebuilding innerHTML on
+ * each of them resets list scroll positions and makes the UI flicker, so lists
+ * remember the signature of what they rendered and skip unchanged redraws.
+ */
+const renderSignatures = new Map();
+
+function changed(key, signature) {
+  if (renderSignatures.get(key) === signature) return false;
+  renderSignatures.set(key, signature);
+  return true;
+}
+
+/** Seconds spent in the current connect attempt, so slow BMCs feel responsive. */
+const elapsedSecs = (at) => `${Math.max(0, Math.round((Date.now() - at) / 1000))}s`;
+
+function tickElapsed() {
+  for (const node of document.querySelectorAll('.elapsed[data-at]')) {
+    const at = Number(node.dataset.at);
+    if (at) node.textContent = ` · ${elapsedSecs(at)}`;
+  }
+}
+
 /* ------------------------------------------------------------------ boot */
 async function init() {
   applyTheme();
@@ -230,7 +263,9 @@ async function init() {
     localStorage.setItem('warned-plain', '1');
     toast('系统钥匙串不可用，凭据将以 base64 明文保存在本机', 'err', 7000);
   }
-  setInterval(sendGrid, 1200);
+  // ResizeObserver handles size changes; this only catches layout shifts it misses.
+  setInterval(sendGrid, 5000);
+  setInterval(tickElapsed, 1000);
 }
 
 function render(next) {
@@ -240,8 +275,14 @@ function render(next) {
   scan = next.scan;
   applyTheme();
   const layout = state.layout || { cols: 3, rows: 3 };
-  document.documentElement.style.setProperty('--cols', layout.cols);
-  document.documentElement.style.setProperty('--rows', layout.rows);
+  if (appliedCols !== layout.cols) {
+    appliedCols = layout.cols;
+    document.documentElement.style.setProperty('--cols', layout.cols);
+  }
+  if (appliedRows !== layout.rows) {
+    appliedRows = layout.rows;
+    document.documentElement.style.setProperty('--rows', layout.rows);
+  }
 
   notifyTransitions(next.sessions || []);
   if (
@@ -256,7 +297,6 @@ function render(next) {
   }
   if (sidePanel === 'connect') renderConnectRecent();
   renderDock();
-  renderTopbarActive();
   notifyLicenses(next.devices || []);
   renderVendorOptions();
   renderPresets();
@@ -268,7 +308,6 @@ function render(next) {
   renderLanding();
   renderHistory();
   renderScan();
-  renderDock();
   syncLayoutSeg();
   sendGrid();
 }
@@ -437,9 +476,11 @@ function updateTile(node, s) {
   if (host) host.textContent = `${s.host} · ${labelOf(s.vendor)}${s.model ? ' · ' + s.model : ''}`;
   const st = node.querySelector('.state');
   if (st) {
-    const spinner = ['loading', 'login', 'kvm'].includes(s.state) ? '<span class="spinner"></span>' : '';
+    const busy = ['loading', 'login', 'kvm'].includes(s.state);
+    const spinner = busy ? '<span class="spinner"></span>' : '';
     st.className = `state ${s.state === 'error' ? 'err' : s.state === 'manual' ? 'warn' : ''}`;
-    st.innerHTML = `${spinner}${esc(s.detail || STATE_LABEL[s.state])}`;
+    const elapsed = busy && s.startedAt ? `<span class="elapsed" data-at="${s.startedAt}"> · ${elapsedSecs(s.startedAt)}</span>` : '';
+    st.innerHTML = `${spinner}${esc(s.detail || STATE_LABEL[s.state])}${elapsed}`;
   }
   const webBtn = node.querySelector('[data-act="web"]');
   if (webBtn) webBtn.textContent = s.webOpen ? 'KVM' : 'Web';
@@ -538,6 +579,10 @@ function renderHistory() {
     .sort((a, b) => (b.lastUsedAt ?? b.createdAt) - (a.lastUsedAt ?? a.createdAt));
   const historyBox = el('history-list');
   if (!historyBox) return;
+  const signature = list
+    .map((d) => `${d.id}:${d.open ? sessionOf(d.id)?.state || 'loading' : 'idle'}:${relTime(d.lastUsedAt)}:${d.name || ''}:${d.ephemeral ? 'e' : ''}`)
+    .join('|');
+  if (!changed('history', `${signature}|${state?.app?.version || ''}`)) return;
   historyBox.innerHTML =
     list
       .map((d) => {
@@ -583,6 +628,24 @@ function renderScan() {
         : '扫描会尝试常见默认凭据（每台最多 2 次，避免锁号）';
   el('scan-status').textContent = status;
 
+  const scanSig = [
+    s.running ? 1 : 0,
+    s.error || '',
+    s.finishedAt || 0,
+    s.scanned,
+    s.hosts
+      .map((h) => `${h.ip}:${h.vendor}:${h.model || ''}:${h.serial || ''}:${h.credential ? 1 : 0}:${h.redfish ? 1 : 0}:${pickedIps.has(h.ip) ? 1 : 0}`)
+      .join('|'),
+  ].join('#');
+  const allIps = s.hosts.map((h) => h.ip);
+  const pickedCount = allIps.filter((ip) => pickedIps.has(ip)).length;
+  el('scan-select-all').checked = allIps.length > 0 && pickedCount === allIps.length;
+  const connectBtn = el('btn-scan-connect');
+  connectBtn.classList.toggle('hidden', pickedCount === 0);
+  connectBtn.textContent = `连接选中 (${pickedCount})`;
+
+  if (!changed('scan-results', scanSig)) return;
+
   el('scan-results').innerHTML =
     s.hosts
       .map((h) => {
@@ -617,12 +680,6 @@ function renderScan() {
       .join('') ||
     `<div class="scan-empty">${s.running ? '正在扫描…' : '还没有结果，输入网段后点“开始扫描”'}</div>`;
 
-  const all = s.hosts.map((h) => h.ip);
-  const pickedCount = all.filter((ip) => pickedIps.has(ip)).length;
-  el('scan-select-all').checked = all.length > 0 && pickedCount === all.length;
-  const btn = el('btn-scan-connect');
-  btn.classList.toggle('hidden', pickedCount === 0);
-  btn.textContent = `连接选中 (${pickedCount})`;
 }
 
 /* ------------------------------------------------------------------ media */
@@ -697,17 +754,20 @@ function renderDock() {
     if (!sidePanel) {
       const list = sessions();
       dockPicked = new Set([...dockPicked].filter((id) => list.some((s) => s.id === id)));
-      el('dock-list').innerHTML =
-        list
-          .map(
-            (s) => `
+      const targetSig = list.map((s) => `${s.id}:${s.state}:${dockPicked.has(s.id) ? 1 : 0}`).join('|');
+      if (changed('dock-list', targetSig)) {
+        el('dock-list').innerHTML =
+          list
+            .map(
+              (s) => `
             <label class="target-row">
               <input type="checkbox" data-id="${esc(s.id)}" ${dockPicked.has(s.id) ? 'checked' : ''} />
               <span class="dot ${s.state}"></span>
               <span class="who"><b>${esc(tabLabel(s))}</b><span>${esc(s.host)}</span></span>
             </label>`,
-          )
-          .join('') || '<div class="muted small">没有打开的会话</div>';
+            )
+            .join('') || '<div class="muted small">没有打开的会话</div>';
+      }
 
       // Always list every mounted image, regardless of the target selection.
       const rows = list
@@ -717,7 +777,9 @@ function renderDock() {
           const extra = m.size ? ` · ${humanSize(m.size)}${m.speed ? ` · ${humanSize(m.speed)}/s` : ''}` : '';
           return `${s.host}: ${m.name || t('已挂载')}${extra}`;
         });
-      el('dock-media-status').innerHTML = rows.join('<br>') || '没有已挂载的镜像';
+      if (changed('dock-media', rows.join('|'))) {
+        el('dock-media-status').innerHTML = rows.join('<br>') || '没有已挂载的镜像';
+      }
     }
   }
   renderTopbarActive();
@@ -896,9 +958,15 @@ api.onPanel?.((payload) => {
 function renderConnectRecent() {
   const list = devices()
     .slice()
-    .sort((a, b) => (b.lastUsedAt ?? b.createdAt) - (a.lastUsedAt ?? a.createdAt))
+    .sort((a, b) => (b.lastUsedAt ?? b.createdAt ?? 0) - (a.lastUsedAt ?? a.createdAt ?? 0))
     .slice(0, 8);
-  el('connect-recent').innerHTML =
+  const box = el('connect-recent');
+  if (!box) return;
+  const signature = list
+    .map((d) => `${d.id}:${d.open ? 1 : 0}:${d.model || d.name || ''}:${relTime(d.lastUsedAt)}`)
+    .join('|');
+  if (!changed('connect-recent', signature)) return;
+  box.innerHTML =
     list
       .map(
         (d) => `
@@ -1337,6 +1405,12 @@ function bindTopbar() {
     }, 50);
   });
 
+  el('tiles').addEventListener('dblclick', (e) => {
+    if (e.target.closest('button')) return;
+    const tile = e.target.closest('.tile[data-id]');
+    if (!tile) return;
+    api.setMode('focus', tile.dataset.id);
+  });
   el('tiles').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;

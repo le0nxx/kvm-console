@@ -114,7 +114,7 @@ const wired = new WeakSet<WebContents>();
 function emptyScan(): ScanState {
   return {
     running: false,
-    subnet: localSubnets()[0]?.cidr ?? '',
+    subnet: cachedSubnets()[0]?.cidr ?? '',
     scanned: 0,
     total: 0,
     hosts: [],
@@ -146,9 +146,30 @@ function kdePrefersDark(): boolean | null {
   return null;
 }
 
+/**
+ * The KDE check reads kdeglobals from disk. Snapshot runs on every push (5 s
+ * plus each session update), so cache it; `nativeTheme` changes invalidate it.
+ */
+let darkCache: { value: boolean; at: number } | null = null;
+
 function systemDark(): boolean {
+  const now = Date.now();
+  if (darkCache && now - darkCache.at < 10_000) return darkCache.value;
   const kde = kdePrefersDark();
-  return kde === null ? nativeTheme.shouldUseDarkColors : kde;
+  const value = kde === null ? nativeTheme.shouldUseDarkColors : kde;
+  darkCache = { value, at: now };
+  return value;
+}
+
+/** Interface enumeration is a syscall per snapshot; subnets rarely change. */
+let subnetCache: { value: Array<{ iface: string; cidr: string }>; at: number } | null = null;
+
+function cachedSubnets(): Array<{ iface: string; cidr: string }> {
+  const now = Date.now();
+  if (subnetCache && now - subnetCache.at < 20_000) return subnetCache.value;
+  const value = localSubnets().map((s) => ({ iface: s.iface, cidr: s.cidr }));
+  subnetCache = { value, at: now };
+  return value;
 }
 
 function snapshot(): AppSnapshot {
@@ -170,14 +191,29 @@ function snapshot(): AppSnapshot {
       encryption: store ? store.encryption : 'plain',
       platform: process.platform,
       hostname: os.hostname(),
-      subnets: localSubnets().map((s) => ({ iface: s.iface, cidr: s.cidr })),
+      subnets: cachedSubnets(),
     },
   };
 }
 
-function push(): void {
+/**
+ * Snapshot pushes arrive at 5 s intervals plus after every session update.
+ * Sending an unchanged snapshot makes both renderers redo their DOM work, so
+ * serialise once and skip identical payloads.
+ */
+let lastPushPayload = '';
+
+function push(force = false): void {
   if (!shellView || shellView.webContents.isDestroyed()) return;
   const snap = snapshot();
+  let payload: string;
+  try {
+    payload = JSON.stringify(snap);
+  } catch {
+    payload = '';
+  }
+  if (!force && payload && payload === lastPushPayload) return;
+  lastPushPayload = payload;
   shellView.webContents.send('state', snap);
   if (panelView && !panelView.webContents.isDestroyed()) {
     panelView.webContents.send('state', snap);
@@ -265,6 +301,12 @@ function setPanelState(next: PanelRequest | null): void {
     prefill: next.prefill,
   };
   shellView?.webContents.send('panel-state', payload);
+  // A hidden panel may have missed deduplicated pushes; give it fresh state.
+  try {
+    view.webContents.send('state', snapshot());
+  } catch {
+    /* panel may be loading */
+  }
   view.webContents.send('panel-state', payload);
   return;
 
@@ -296,7 +338,11 @@ function gridArea(): Rect {
 
 let globalAccels: string[] = [];
 
+/** Called for every key event from KVM pages; opt-in via KVM_DEBUG=1. */
+const DEBUG_SHORTCUTS = process.env.KVM_DEBUG === '1';
+
 function debugShortcut(entry: Record<string, unknown>): void {
+  if (!DEBUG_SHORTCUTS) return;
   try {
     fs.appendFileSync(
       path.join(app.getPath('userData'), 'shortcut-debug.log'),
@@ -690,7 +736,7 @@ async function createWindow(): Promise<void> {
     try {
       const password = store.passwordOf(device.id);
       const oldPrefix = device.host.split('.').slice(0, 3).join('.');
-      const subnets = localSubnets().sort((a, b) => {
+      const subnets = [...localSubnets()].sort((a, b) => {
         const sa = a.cidr.startsWith(oldPrefix + '.') ? 0 : 1;
         const sb = b.cidr.startsWith(oldPrefix + '.') ? 0 : 1;
         return sa - sb;
@@ -782,7 +828,10 @@ async function createWindow(): Promise<void> {
     },
   );
   registerIpc();
-  nativeTheme.on('updated', () => schedulePush());
+  nativeTheme.on('updated', () => {
+    darkCache = null;
+    schedulePush();
+  });
   setInterval(() => schedulePush(), 5000);
   manager.syncOpen();
   syncAutoLayout();
@@ -946,6 +995,7 @@ function registerIpc(): void {
   });
 
   ipcMain.handle('ui:reload', () => {
+    lastPushPayload = '';
     shellView?.webContents.reload();
     panelView?.webContents.reload();
     return true;

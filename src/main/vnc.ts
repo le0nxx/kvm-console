@@ -6,7 +6,11 @@ import crypto from 'node:crypto';
 import os from 'node:os';
 import { WebSocketServer, WebSocket } from 'ws';
 
+/** Frame-level wire tracing; opt-in via KVM_DEBUG_VNC=1 (it writes per frame). */
+const DEBUG_WIRE = process.env.KVM_DEBUG_VNC === '1';
+
 function traceWire(dir: 'c2s' | 's2c', data: Buffer): void {
+  if (!DEBUG_WIRE) return;
   try {
     const line = `${new Date().toISOString()} ${dir} len=${data.length} ${data.subarray(0, 48).toString('hex')}\n`;
     fs.appendFileSync(path.join(os.homedir(), '.config', 'kvm-console', 'wire-debug.log'), line);
@@ -47,17 +51,41 @@ export class VncBridge {
     if (this.wss && this.web) return;
 
     const root = path.join(__dirname, '../../src/renderer');
+    // noVNC pulls a few dozen small files on every console open; serve them
+    // from memory instead of hitting the filesystem each time.
+    const staticCache = new Map<string, { body: Buffer; type: string }>();
     this.web = http.createServer((req, res) => {
       try {
         const url = new URL(req.url ?? '/', 'http://127.0.0.1');
         const file = path.normalize(path.join(root, decodeURIComponent(url.pathname)));
-        if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+        if (!file.startsWith(root)) {
           res.writeHead(404);
           res.end('not found');
           return;
         }
-        res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
-        fs.createReadStream(file).pipe(res);
+        let entry = staticCache.get(file);
+        if (!entry) {
+          let stat: fs.Stats;
+          try {
+            stat = fs.statSync(file);
+          } catch {
+            res.writeHead(404);
+            res.end('not found');
+            return;
+          }
+          if (stat.isDirectory() || stat.size > 4 * 1024 * 1024) {
+            res.writeHead(404);
+            res.end('not found');
+            return;
+          }
+          entry = {
+            body: fs.readFileSync(file),
+            type: MIME[path.extname(file)] || 'application/octet-stream',
+          };
+          staticCache.set(file, entry);
+        }
+        res.writeHead(200, { 'Content-Type': entry.type, 'Content-Length': entry.body.length });
+        res.end(entry.body);
       } catch {
         res.writeHead(500);
         res.end();
@@ -79,6 +107,12 @@ export class VncBridge {
         const upstream = new WebSocket(target.wsUrl, 'binary', {
           headers: { Cookie: target.cookie, Origin: `https://${new URL(target.wsUrl).hostname}` },
           rejectUnauthorized: false,
+          perMessageDeflate: false,
+        });
+        upstream.on('open', () => {
+          // ws keeps the raw socket private; disable Nagle once it is up.
+          const raw = (upstream as unknown as { _socket?: net.Socket })._socket;
+          raw?.setNoDelay(true);
         });
         const key2Frame = Buffer.alloc(2 + target.key2.length + 8);
         key2Frame[0] = 0xf7;
@@ -116,6 +150,8 @@ export class VncBridge {
         upstream.on('error', () => ws.close());
       } else {
         const tcp = net.connect(target.port, target.host);
+        // Nagle adds up to 40 ms to every keystroke in the console.
+        tcp.setNoDelay(true);
         tcp.on('data', (data) => {
           try {
             ws.send(data);

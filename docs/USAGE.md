@@ -1,4 +1,4 @@
-# KVM Console 2.3.2 使用说明
+# KVM Console 2.3.3 使用说明
 
 多路网页 KVM 控制台，支持华为/超聚变 iBMC、戴尔 iDRAC、浪潮 ISBMC 及通用 BMC。
 
@@ -7,7 +7,7 @@
 ### Linux（Arch）
 
 ```bash
-sudo pacman -U kvm-console-2.3.2-1-x86_64.pkg.tar.zst
+sudo pacman -U kvm-console-2.3.3-1-x86_64.pkg.tar.zst
 kvm-console
 ```
 
@@ -160,5 +160,5 @@ BMC 页面触发的下载：
 
 ---
 
-版本：2.3.2  
+版本：2.3.3  
 发布日期：2026-11-24

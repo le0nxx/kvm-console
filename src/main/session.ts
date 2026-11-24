@@ -139,7 +139,16 @@ export interface SessionHooks {
   onShortcutInput?: (input: { control: boolean; shift: boolean; alt: boolean; meta: boolean; key: string; code?: string }) => void;
 }
 
+/**
+ * Session trace logging. These hooks fire per console message and per frame
+ * load; writing synchronously on every call cost real latency, so they are
+ * opt-in via KVM_DEBUG=1.
+ */
+const DEBUG_TRACE = process.env.KVM_DEBUG === '1';
+const DEBUG_CONSOLE = process.env.KVM_DEBUG_CONSOLE === '1';
+
 function debugSession(entry: Record<string, unknown>): void {
+  if (!DEBUG_TRACE) return;
   try {
     fs.appendFileSync(
       path.join(app.getPath('userData'), 'debug.log'),
@@ -184,6 +193,7 @@ export class KvmSession {
   private hiddenBounds?: Rect;
   private password: string;
   private running = false;
+  private startedAt = 0;
   private disposed = false;
   private healthTimer?: NodeJS.Timeout;
   private hooks: SessionHooks;
@@ -265,7 +275,7 @@ export class KvmSession {
     wc.on('console-message', (event: Electron.Event & { message?: string }) => {
       const text = event?.message;
       if (typeof text !== 'string') return;
-      debugSession({ event: 'console', id: this.id, text: text.slice(0, 500) });
+      if (DEBUG_CONSOLE) debugSession({ event: 'console', id: this.id, text: text.slice(0, 500) });
       if (text.startsWith('__KVM_KEYDBG__')) {
         this.hooks.onShortcutInput?.({
           control: false, shift: false, alt: false, meta: false,
@@ -481,6 +491,7 @@ export class KvmSession {
     debugSession({ event: 'start', id: this.id, host: this.device.host, vendor: this.device.vendor, mode: this.device.mode });
     if (this.running || this.disposed) return;
     this.running = true;
+    this.startedAt = Date.now();
     this.limitRetried = false;
     this.vncActive = false;
     this.stopHealth();
@@ -520,7 +531,7 @@ export class KvmSession {
       }
 
       await this.dismissPostLogin();
-      await sleep(250);
+      await sleep(120);
 
       const loopback = /^(127\.|localhost$)/.test(this.device.host);
       const mode = loopback
@@ -1167,26 +1178,27 @@ export class KvmSession {
 
     // Generic: click a console entry, in any frame. The dashboard is an SPA and
     // may still be rendering right after login, so poll for a while.
+    // Frames are probed concurrently: a vendor dashboard can split the console
+    // entry across several iframes, and serial probing multiplied the wait.
     const deadline = Date.now() + 20000;
     while (Date.now() < deadline) {
-      for (const frame of this.framesInPage()) {
-        const started = await this.frameExec<ClickResult>(frame, startConsoleScript(), 4000);
-        if (started && started.ok) {
-          for (let k = 0; k < 20 && !this.external; k++) await sleep(500);
-          if (this.external) return;
-        }
+      const started = await Promise.all(
+        this.framesInPage().map((frame) => this.frameExec<ClickResult>(frame, startConsoleScript(), 4000)),
+      );
+      if (started.some((r) => r?.ok)) {
+        for (let k = 0; k < 20 && !this.external; k++) await sleep(500);
+        if (this.external) return;
       }
-      for (const frame of this.framesInPage()) {
-        const clicked = await this.frameExec<ClickResult>(frame, launchKvmScript(), 9000);
-        if (clicked && clicked.ok) {
-          await sleep(1500);
-          // iDRAC-style UIs need a second click on "Start/Launch ...".
-          for (const inner of this.framesInPage()) {
-            const launched = await this.frameExec<ClickResult>(inner, launchConsoleScript(), 4000);
-            if (launched && launched.ok) break;
-          }
-          return;
-        }
+      const clicked = await Promise.all(
+        this.framesInPage().map((frame) => this.frameExec<ClickResult>(frame, launchKvmScript(), 9000)),
+      );
+      if (clicked.some((r) => r?.ok)) {
+        await sleep(1500);
+        // iDRAC-style UIs need a second click on "Start/Launch ...".
+        await Promise.all(
+          this.framesInPage().map((frame) => this.frameExec<ClickResult>(frame, launchConsoleScript(), 4000)),
+        );
+        return;
       }
       await sleep(1000);
     }
@@ -1227,7 +1239,11 @@ export class KvmSession {
 
   private async waitForFrame(): Promise<void> {
     for (let i = 0; i < 45; i++) {
-      const frame = await this.run<FrameProbe>(frameProbeScript(), 4000);
+      // framesInPage() already includes the top frame, so probe each once, in parallel.
+      const probes = await Promise.all(
+        this.framesInPage().map((f) => this.frameExec<FrameProbe>(f, frameProbeScript(), 4000)),
+      );
+      const frame = probes.find((p) => p?.ok);
       if (frame && frame.ok) {
         this.canvas = { w: Number(frame.w), h: Number(frame.h) };
         this.setState('ready', `${frame.w}×${frame.h}`);
@@ -1407,7 +1423,7 @@ export class KvmSession {
     } catch {
       return;
     }
-    await sleep(70);
+    await sleep(40);
 
     const info = await this.run<{
       cw: number;
@@ -1463,7 +1479,7 @@ export class KvmSession {
     } catch {
       /* ignore */
     }
-    await sleep(70);
+    await sleep(40);
     await this.run(
       `(() => {
         const c = document.querySelector('canvas');
@@ -2267,6 +2283,7 @@ export class KvmSession {
       external: !!this.consoleWin,
       canvas: this.canvas,
       webOpen: this.webOpen,
+      startedAt: this.startedAt || undefined,
     };
   }
 

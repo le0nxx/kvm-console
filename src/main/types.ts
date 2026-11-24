@@ -105,6 +105,8 @@ export interface SessionSnapshot {
   external?: boolean;
   webOpen?: boolean;
   canvas?: { w: number; h: number };
+  /** when the current connect attempt began, for the elapsed-time readout */
+  startedAt?: number;
 }
 
 export interface VendorInfo {

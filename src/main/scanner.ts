@@ -242,21 +242,22 @@ export async function scanSubnet(
   let scanned = 0;
   const responsive: Array<{ ip: string; port: number; scheme: Scheme; mac?: string }> = [];
 
-  await pool(hosts, 64, async (ip) => {
+  // Probe HTTPS and HTTP together and scan a /24 in two waves: sequential
+  // probes doubled the worst-case time per dead address.
+  await pool(hosts, 128, async (ip) => {
     if (hooks.isCancelled()) return;
-    let port = 0;
-    if (await tcpOpen(ip, 443)) port = 443;
-    else if (await tcpOpen(ip, 80)) port = 80;
+    const [https, http] = await Promise.all([tcpOpen(ip, 443), tcpOpen(ip, 80)]);
+    const port = https ? 443 : http ? 80 : 0;
     if (port) {
       responsive.push({ ip, port, scheme: port === 443 ? 'https' : 'http', mac: arp[ip] });
     }
     scanned++;
-    if (scanned % 16 === 0 || scanned === hosts.length) hooks.onProgress(scanned, hosts.length);
+    if (scanned % 8 === 0 || scanned === hosts.length) hooks.onProgress(scanned, hosts.length);
   });
 
   // ARP-only hosts that did not answer on 443/80 are usually not BMCs; skip them.
   const results: ScanHost[] = [];
-  await pool(responsive, 5, async (entry) => {
+  await pool(responsive, 8, async (entry) => {
     if (hooks.isCancelled()) return;
     const host: ScanHost = {
       ip: entry.ip,

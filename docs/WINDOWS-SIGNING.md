@@ -122,8 +122,8 @@ npx electron-builder --win nsis portable
 ## 验证
 
 ```powershell
-signtool verify /pa /v .\KVM-Console-2.3.2-win-x64-setup.exe
-Get-AuthenticodeSignature .\KVM-Console-2.3.2-win-x64-portable.exe
+signtool verify /pa /v .\KVM-Console-2.3.3-win-x64-setup.exe
+Get-AuthenticodeSignature .\KVM-Console-2.3.3-win-x64-portable.exe
 ```
 
 ## 注意
