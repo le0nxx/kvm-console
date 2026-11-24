@@ -1164,3 +1164,8 @@ html[data-theme="light"] .pill.cred-unknown { color: #9a6700; border-color: #e3c
 .download-meta { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
 .download-bar-mini { height: 3px; margin-top: 4px; background: var(--bg-2); border-radius: 2px; overflow: hidden; }
 .download-bar-mini i { display: block; height: 100%; background: var(--accent); }
+.download-chip { grid-template-columns: 1fr !important; }
+.download-chip svg { grid-column: 1; grid-row: 1; }
+#dock-panel-downloads { padding: 4px 0; }
+#dock-panel-downloads .download-head { padding: 2px 0 8px; }
+#dock-panel-downloads .download-list { max-height: 46vh; border: 1px solid var(--line); border-radius: 6px; }

@@ -49,17 +49,6 @@
         <button class="btn ghost" id="btn-settings">设置</button>
       </header>
 
-      <div id="download-panel" class="download-panel hidden">
-        <div class="download-head">
-          <b>下载</b>
-          <button class="btn tiny ghost" id="download-folder">打开目录</button>
-          <button class="btn tiny ghost" id="download-clear">清空</button>
-        </div>
-        <div id="download-list" class="download-list">
-          <div class="muted small">还没有下载</div>
-        </div>
-      </div>
-
       <main id="grid">
         <div id="tiles"></div>
 
@@ -177,6 +166,17 @@
             </div>
           </div>
         </div>
+        <div id="dock-panel-downloads" class="dock-panel hidden">
+          <div class="download-head">
+            <b>下载</b>
+            <button class="btn tiny ghost" id="download-folder">打开目录</button>
+            <button class="btn tiny ghost" id="download-clear">清空</button>
+          </div>
+          <div id="download-list" class="download-list">
+            <div class="muted small">还没有下载</div>
+          </div>
+        </div>
+
         <div id="dock-panel-terminal" class="dock-panel hidden">
           <div class="terminal-bar">
             <select id="term-tool">

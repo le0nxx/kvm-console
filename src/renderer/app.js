@@ -163,6 +163,7 @@ async function init() {
   themeMedia.addEventListener('change', () => { if (themeMode === 'auto') applyTheme(); });
   bindTopbar();
   bindSheets();
+  renderDownloads();
   observeGrid();
   window.addEventListener('resize', sendGrid);
 
@@ -629,7 +630,7 @@ function renderDock() {
     for (const tab of dock.querySelectorAll('.dock-tab')) {
       tab.classList.toggle('on', tab.dataset.panel === dockPanel);
     }
-    for (const panel of ['input', 'media', 'power', 'broadcast', 'reconnect', 'terminal']) {
+    for (const panel of ['input', 'media', 'power', 'broadcast', 'reconnect', 'terminal', 'downloads']) {
       const node = el(`dock-panel-${panel}`);
       if (node) node.classList.toggle('hidden', !!sidePanel || panel !== dockPanel);
     }
@@ -1133,12 +1134,7 @@ function fillLandingDefaults() {
 
 /* ------------------------------------------------------------------ bind */
 function bindTopbar() {
-  el('download-chip').addEventListener('click', (e) => {
-    e.stopPropagation();
-    downloadPanelOpen = !downloadPanelOpen;
-    el('download-panel').classList.toggle('hidden', !downloadPanelOpen);
-    renderDownloads();
-  });
+  el('download-chip').addEventListener('click', () => openDock('downloads'));
   el('download-folder').addEventListener('click', (e) => {
     e.stopPropagation();
     void api.openDownloadsFolder();
@@ -1157,14 +1153,6 @@ function bindTopbar() {
     const row = open.closest('.download-row');
     if (row?.dataset.path) void api.openDownload(row.dataset.path);
   });
-  document.addEventListener('click', (e) => {
-    if (!downloadPanelOpen) return;
-    if (e.target.closest('#download-panel') || e.target.closest('#download-chip')) return;
-    downloadPanelOpen = false;
-    el('download-panel').classList.add('hidden');
-    renderDownloads();
-  });
-
   el('btn-connect').addEventListener('click', () => openSide('connect'));
   el('btn-scan').addEventListener('click', () => openSide('scan'));
   el('btn-terminal').addEventListener('click', () => {
@@ -1347,8 +1335,18 @@ function bindTopbar() {
   });
 }
 
-let downloadPanelOpen = false;
+const DOWNLOAD_STORE = 'kvm-downloads-v1';
 const downloads = new Map();
+try {
+  const saved = JSON.parse(localStorage.getItem(DOWNLOAD_STORE) || '[]');
+  for (const d of Array.isArray(saved) ? saved : []) if (d?.key) downloads.set(d.key, d);
+} catch { /* ignore */ }
+
+function saveDownloads() {
+  try {
+    localStorage.setItem(DOWNLOAD_STORE, JSON.stringify([...downloads.values()].slice(-80)));
+  } catch { /* ignore */ }
+}
 
 function fmtBytes(n) {
   const v = Number(n) || 0;
@@ -1379,8 +1377,8 @@ function renderDownloads() {
   chip.classList.toggle('done', !active.length && rows.some((d) => d.state === 'done'));
   chip.classList.toggle('failed', !active.length && rows.some((d) => d.state === 'error'));
   chip.classList.remove('hidden');
-  chip.classList.toggle('open', downloadPanelOpen);
 
+  saveDownloads();
   if (!rows.length) {
     list.innerHTML = '<div class="muted small">还没有下载</div>';
     return;
