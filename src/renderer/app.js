@@ -62,8 +62,16 @@ let connectPrefill = null;
 let pendingSerial = '';
 const lastLicense = new Map();
 
-/* Credential presets: a fixed number of slots, so saved pairs keep their
-   position instead of shifting when one is deleted. No built-in credentials. */
+const BUILTIN_CREDS = [
+  { u: 'Administrator', p: 'Admin@9000', label: '华为 / 超聚变' },
+  { u: 'admin', p: 'Admin@9000', label: '华为（新固件）' },
+  { u: 'root', p: 'calvin', label: '戴尔 iDRAC' },
+  { u: 'admin', p: 'admin', label: '浪潮 ISBMC' },
+  { u: 'superuser', p: 'superuser', label: '浪潮（旧）' },
+];
+
+/* Saved presets live in fixed slots, so a pair keeps its position instead of
+   shifting when another slot is cleared. */
 const PRESET_SLOTS = 6;
 const CRED_PRESET_KEY = 'kvm-cred-presets';
 
@@ -88,13 +96,18 @@ function writeCredSlots(slots) {
 }
 
 function renderPresets() {
-  const html = credSlots()
+  const builtin = BUILTIN_CREDS.map(
+    (c) =>
+      `<span class="preset-chip" data-u="${esc(c.u)}" data-p="${esc(c.p)}" title="${esc(c.label)}">${esc(c.u)} : ${esc(c.p)}</span>`,
+  ).join('');
+  const saved = credSlots()
     .map((c, i) =>
       c
         ? `<span class="preset-chip custom" data-slot="${i}" data-u="${esc(c.u)}" data-p="${esc(c.p)}">${esc(c.u)} : ${esc(c.p)}<b class="del" data-del="${i}" title="${esc(t('删除这个预设'))}">×</b></span>`
         : `<span class="preset-chip preset-empty" data-slot="${i}" title="${esc(t('点击把当前用户名和密码存到这个位置'))}">${esc(t('空位'))}</span>`,
     )
     .join('');
+  const html = builtin + saved;
   for (const id of ['l-presets', 'c-presets']) {
     const box = el(id);
     if (box) box.innerHTML = html;
@@ -112,6 +125,26 @@ function storeCredSlot(prefix, index) {
   return toast('已保存为快速预设', 'ok');
 }
 
+function vendorDefault(vendorId) {
+  return (state.vendors || []).find((v) => v.id === vendorId)?.defaults?.[0] || null;
+}
+
+/** switching vendor overwrites user/password with that vendor's default pair */
+function applyVendorDefaults(prefix) {
+  const d = vendorDefault(el(`${prefix}-vendor`).value);
+  if (!d) return;
+  el(`${prefix}-username`).value = d.u;
+  el(`${prefix}-password`).value = d.p;
+}
+
+function fillConnectDefaults() {
+  applyVendorDefaults('c');
+}
+
+function fillLandingDefaults() {
+  applyVendorDefaults('l');
+}
+
 function fillConnectForm(v) {
   el('c-host').value = v.host || '';
   el('c-port').value = String(v.port || 443);
@@ -127,13 +160,14 @@ function fillConnectForm(v) {
 }
 
 function openConnectFor(host, mode = 'auto') {
+  const preset = (state.vendors || []).find((v) => v.id === (host.vendor || 'generic'))?.defaults?.[0];
   connectPrefill = {
     host: host.ip,
     port: host.port || 443,
     scheme: host.scheme || 'https',
     vendor: host.vendor || 'generic',
-    username: host.credential?.username || '',
-    password: host.credential?.password || '',
+    username: host.credential?.username || preset?.u || '',
+    password: host.credential?.password || preset?.p || '',
     name: host.model || host.title || '',
     serial: host.serial || '',
     mode,
@@ -149,7 +183,10 @@ function savePreset(prefix) {
     return;
   }
   const slots = credSlots();
-  if (slots.some((c) => c && c.u === u && c.p === p)) {
+  const exists =
+    slots.some((c) => c && c.u === u && c.p === p) ||
+    BUILTIN_CREDS.some((c) => c.u === u && c.p === p);
+  if (exists) {
     toast('该组合已在预设里', 'ok');
     return;
   }
@@ -489,6 +526,7 @@ function renderLanding() {
 
   if (!landingDone) {
     landingDone = true;
+    fillLandingDefaults();
     setTimeout(() => el('l-host').focus(), 40);
   }
 }
@@ -703,6 +741,7 @@ function resetConnectForm() {
   pendingSerial = '';
   el('connect-msg').textContent = '';
   fillVendorInfo(firstVendor);
+  fillConnectDefaults();
   updateLicenseBox();
 }
 
@@ -835,7 +874,9 @@ api.onPanel?.((payload) => {
         if (pw && !el('c-password').value) el('c-password').value = pw;
       });
     }
+    const freshVendor = !el('c-vendor').value;
     fillVendorInfo(el('c-vendor').value);
+    if (freshVendor) fillConnectDefaults();
     setTimeout(() => el('c-host')?.focus(), 30);
   }
   if (sidePanel !== 'shortcuts' && shortcutCaptureId) {
@@ -1316,7 +1357,7 @@ function bindTopbar() {
 
   el('btn-landing-connect').addEventListener('click', () => landingConnect(false));
   el('btn-landing-only').addEventListener('click', () => landingConnect(true));
-  el('l-vendor').addEventListener('change', () => fillVendorInfo(el('c-vendor').value));
+  el('l-vendor').addEventListener('change', fillLandingDefaults);
   el('l-save-preset').addEventListener('click', () => savePreset('l'));
   el('c-save-preset').addEventListener('click', () => savePreset('c'));
   bindPresetBox('l-presets', 'l');
@@ -1487,6 +1528,7 @@ function bindSheets() {
   });
   el('c-vendor').addEventListener('change', () => {
     fillVendorInfo(el('c-vendor').value);
+    fillConnectDefaults();
     updateLicenseBox();
   });
   el('c-reset').addEventListener('click', resetConnectForm);
@@ -1583,14 +1625,15 @@ function bindSheets() {
       return;
     }
     const vendor = host.vendor || 'generic';
+    const preset = (state.vendors || []).find((v) => v.id === vendor)?.defaults?.[0];
     const savedPass = saved ? await api.passwordFor(saved.host, saved.port) : '';
     const payload = {
       host: host.ip,
       port: host.port ?? 443,
       scheme: host.scheme ?? 'https',
       vendor,
-      username: host.credential?.username ?? saved?.username ?? '',
-      password: host.credential?.password ?? savedPass ?? '',
+      username: host.credential?.username ?? saved?.username ?? preset?.u ?? '',
+      password: host.credential?.password ?? savedPass ?? preset?.p ?? '',
       name: host.model || saved?.model || '',
       serial: host.serial || saved?.serial || undefined,
       mode: vnc ? 'vnc' : 'web',
@@ -1934,14 +1977,15 @@ async function connectSelected() {
   for (const h of hosts) {
     const saved = savedDeviceFor(h.ip, h.port);
     const vendor = h.vendor || saved?.vendor || 'generic';
+    const preset = (state.vendors || []).find((v) => v.id === vendor)?.defaults?.[0];
     const savedPass = saved ? await api.passwordFor(saved.host, saved.port) : '';
     const res = await api.connect({
       host: h.ip,
       port: h.port ?? 443,
       scheme: h.scheme ?? 'https',
       vendor,
-      username: h.credential?.username ?? saved?.username ?? '',
-      password: h.credential?.password ?? savedPass ?? '',
+      username: h.credential?.username ?? saved?.username ?? preset?.u ?? '',
+      password: h.credential?.password ?? savedPass ?? preset?.p ?? '',
       name: h.model || saved?.model || '',
       serial: h.serial || saved?.serial || undefined,
       ephemeral: false,

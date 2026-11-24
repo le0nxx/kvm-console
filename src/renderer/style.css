@@ -275,6 +275,7 @@ kbd {
 }
 .vendor-hint:empty { display: none; }
 
+
 .import-panel { background: #0b1524; border: 1px solid #1b2b42; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
 .import-panel code { color: #9dc0ff; font-size: 10.5px; }
 .import-panel .row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
