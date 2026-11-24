@@ -197,15 +197,15 @@ export class KvmSession {
 
     this.downloadHandler = (_e, item) => {
       const url = item.getURL();
-      if (/\.jnlp(\?|$)/i.test(url)) {
+      const fileName = item.getFilename() || '';
+      if (/\.jnlp(\?|$)/i.test(url) || /\.jnlp$/i.test(fileName)) {
         item.cancel();
         this.setState('manual', '该 iBMC 只提供 Java KVM（kvm.jnlp），已阻止下载；请使用 HTML5 控制台或连接页的 VNC');
         return;
       }
       let target = '';
       try {
-        const serial = (this.device.serial || this.device.host || 'bmc').replace(/[^A-Za-z0-9._-]+/g, '_');
-        const dir = path.join(app.getPath('downloads'), serial);
+        const dir = path.join(app.getPath('downloads'), 'KVM-Console');
         fs.mkdirSync(dir, { recursive: true });
         const raw = item.getFilename() || 'download.bin';
         const safe = raw.replace(/[\\/:*?"<>|]+/g, '_') || 'download.bin';

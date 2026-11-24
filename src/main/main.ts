@@ -8,6 +8,7 @@ import {
   nativeTheme,
   globalShortcut,
   session as electronSession,
+  shell,
   type WebContents,
 } from 'electron';
 import fs from 'node:fs';
@@ -999,6 +1000,13 @@ function registerIpc(): void {
     return manager.get(id)?.focusConsole() ?? false;
   });
 
+  ipcMain.handle('downloads:openFolder', async () => {
+    const dir = path.join(app.getPath('downloads'), 'KVM-Console');
+    fs.mkdirSync(dir, { recursive: true });
+    return shell.openPath(dir);
+  });
+  ipcMain.handle('downloads:open', (_e, target: string) => shell.openPath(String(target || '')));
+
   ipcMain.handle('tools:available', () => toolsAvailable());
   ipcMain.handle('tools:run', async (_e, id: string, tool: 'racadm' | 'ipmitool', command: string) => {
     const session = manager.get(id);
@@ -1586,6 +1594,16 @@ async function bootstrapOpenSessions(): Promise<void> {
 async function main(): Promise<void> {
   await app.whenReady();
   Menu.setApplicationMenu(null);
+  const guardedDownloadSessions = new WeakSet<Electron.Session>();
+  app.on('web-contents-created', (_event, contents) => {
+    const ses = contents.session;
+    if (guardedDownloadSessions.has(ses)) return;
+    guardedDownloadSessions.add(ses);
+    ses.on('will-download', (_e, item) => {
+      const url = item.getURL();
+      if (/\.jnlp(\?|$)/i.test(url) || /\.jnlp$/i.test(item.getFilename() || '')) item.cancel();
+    });
+  });
 
   store = new Store(DEMO);
   if (DEMO) await seedDemo();

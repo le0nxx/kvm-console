@@ -1133,6 +1133,38 @@ function fillLandingDefaults() {
 
 /* ------------------------------------------------------------------ bind */
 function bindTopbar() {
+  el('download-chip').addEventListener('click', (e) => {
+    e.stopPropagation();
+    downloadPanelOpen = !downloadPanelOpen;
+    el('download-panel').classList.toggle('hidden', !downloadPanelOpen);
+    renderDownloads();
+  });
+  el('download-folder').addEventListener('click', (e) => {
+    e.stopPropagation();
+    void api.openDownloadsFolder();
+  });
+  el('download-clear').addEventListener('click', (e) => {
+    e.stopPropagation();
+    for (const [key, d] of downloads) {
+      if (d.state === 'started' || d.state === 'progress') continue;
+      downloads.delete(key);
+    }
+    renderDownloads();
+  });
+  el('download-list').addEventListener('click', (e) => {
+    const open = e.target.closest('[data-download-open]');
+    if (!open) return;
+    const row = open.closest('.download-row');
+    if (row?.dataset.path) void api.openDownload(row.dataset.path);
+  });
+  document.addEventListener('click', (e) => {
+    if (!downloadPanelOpen) return;
+    if (e.target.closest('#download-panel') || e.target.closest('#download-chip')) return;
+    downloadPanelOpen = false;
+    el('download-panel').classList.add('hidden');
+    renderDownloads();
+  });
+
   el('btn-connect').addEventListener('click', () => openSide('connect'));
   el('btn-scan').addEventListener('click', () => openSide('scan'));
   el('btn-terminal').addEventListener('click', () => {
@@ -1315,27 +1347,67 @@ function bindTopbar() {
   });
 }
 
-let downloadTimer;
+let downloadPanelOpen = false;
+const downloads = new Map();
+
+function fmtBytes(n) {
+  const v = Number(n) || 0;
+  if (v >= 1024 * 1024 * 1024) return `${(v / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  if (v >= 1024 * 1024) return `${(v / 1024 / 1024).toFixed(1)} MB`;
+  if (v >= 1024) return `${(v / 1024).toFixed(0)} KB`;
+  return `${v} B`;
+}
+
+function renderDownloads() {
+  const chip = el('download-chip');
+  const list = el('download-list');
+  if (!chip || !list) return;
+  const rows = [...downloads.values()].sort((a, b) => (b.updated || 0) - (a.updated || 0));
+  const active = rows.filter((d) => d.state === 'started' || d.state === 'progress');
+  let pct = 0;
+  if (active.length) {
+    const cur = active[0];
+    pct = cur.total > 0 ? Math.min(100, Math.round((cur.received / cur.total) * 100)) : 0;
+    chip.style.setProperty('--p', String(pct));
+    chip.classList.add('downloading');
+    chip.title = `${cur.name} · ${pct}%`;
+  } else {
+    chip.style.setProperty('--p', '0');
+    chip.classList.remove('downloading');
+    chip.title = '下载管理';
+  }
+  chip.classList.toggle('done', !active.length && rows.some((d) => d.state === 'done'));
+  chip.classList.toggle('failed', !active.length && rows.some((d) => d.state === 'error'));
+  chip.classList.remove('hidden');
+  chip.classList.toggle('open', downloadPanelOpen);
+
+  if (!rows.length) {
+    list.innerHTML = '<div class="muted small">还没有下载</div>';
+    return;
+  }
+  list.innerHTML = rows
+    .map((d) => {
+      const p = d.total > 0 ? Math.min(100, Math.round((d.received / d.total) * 100)) : 0;
+      const status = d.state === 'done' ? '完成' : d.state === 'error' ? `失败${d.error ? `：${esc(d.error)}` : ''}` : `${p}%`;
+      return `
+        <div class="download-row" data-path="${esc(d.path || '')}">
+          <div class="download-main">
+            <div class="download-name" title="${esc(d.path || d.name)}">${esc(d.name)}</div>
+            <div class="download-meta">${status}${d.total ? ` · ${fmtBytes(d.received)} / ${fmtBytes(d.total)}` : ''}</div>
+            ${d.state === 'started' || d.state === 'progress' ? `<div class="download-bar-mini"><i style="width:${p}%"></i></div>` : ''}
+          </div>
+          ${d.path ? '<button class="btn tiny ghost" data-download-open>打开</button>' : ''}
+        </div>`;
+    })
+    .join('');
+}
+
 function renderDownload(ev) {
   const chip = el('download-chip');
   if (!chip || !ev) return;
-  clearTimeout(downloadTimer);
-  chip.classList.remove('hidden', 'done', 'failed');
-  const total = Number(ev.total) || 0;
-  const received = Number(ev.received) || 0;
-  const pct = total > 0 ? Math.min(100, Math.round((received / total) * 100)) : 0;
-  const shown = ev.state === 'done' ? 100 : pct;
-  chip.style.setProperty('--p', String(shown));
-  chip.title = `${ev.name || '下载'} · ${ev.state === 'done' ? '完成' : ev.state === 'error' ? '失败' : pct + '%'}`;
-  const label = el('dl-info');
-  if (label) label.textContent = ev.state === 'done' ? '✓' : ev.state === 'error' ? '!' : String(pct);
-  if (ev.state === 'done') {
-    chip.classList.add('done');
-    downloadTimer = setTimeout(() => chip.classList.add('hidden'), 4000);
-  } else if (ev.state === 'error') {
-    chip.classList.add('failed');
-    downloadTimer = setTimeout(() => chip.classList.add('hidden'), 7000);
-  }
+  const key = ev.path || `${ev.id || ''}:${ev.name || ''}`;
+  downloads.set(key, { ...ev, key, updated: Date.now() });
+  renderDownloads();
 }
 
 function syncLayoutSeg() {

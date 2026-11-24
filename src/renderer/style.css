@@ -1081,3 +1081,86 @@ html[data-theme="light"] .pill.cred-unknown { color: #9a6700; border-color: #e3c
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* persistent download manager */
+.download-chip {
+  display: grid !important;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: conic-gradient(var(--accent) calc(var(--p, 0) * 1%), var(--line) 0);
+  position: relative;
+  cursor: pointer;
+}
+.download-chip.hidden { display: grid !important; }
+.download-chip::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--panel);
+}
+.download-chip svg {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.download-chip.downloading svg { stroke: var(--accent); }
+.download-chip.done { background: var(--ok); }
+.download-chip.done svg { stroke: #fff; }
+.download-chip.failed { background: var(--err); }
+.download-chip.failed svg { stroke: #fff; }
+.download-chip.open { border-color: var(--accent); }
+
+.download-panel {
+  position: fixed;
+  top: 54px;
+  right: 172px;
+  width: min(390px, 80vw);
+  max-height: 55vh;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.download-panel.hidden { display: none; }
+.download-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.download-head b { flex: 1; font-size: 12px; }
+.download-list { overflow: auto; padding: 4px 0; }
+.download-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.download-row:last-child { border-bottom: 0; }
+.download-main { flex: 1; min-width: 0; }
+.download-name {
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.download-meta { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+.download-bar-mini { height: 3px; margin-top: 4px; background: var(--bg-2); border-radius: 2px; overflow: hidden; }
+.download-bar-mini i { display: block; height: 100%; background: var(--accent); }

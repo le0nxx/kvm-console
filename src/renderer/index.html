@@ -29,9 +29,11 @@
           <b id="focus-name"></b>
         </div>
         <div class="stat" id="stat">0 个标签</div>
-        <div id="download-chip" class="download-chip hidden" title="下载中">
-          <span id="dl-info">0</span>
-        </div>
+        <button id="download-chip" class="download-chip" title="下载管理" aria-label="下载管理">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v10m0 0 4-4m-4 4-4-4M5 17v2h14v-2" />
+          </svg>
+        </button>
 
         <div class="spacer"></div>
 
@@ -46,6 +48,17 @@
         <button class="btn ghost" id="btn-power" title="电源控制">电源</button>
         <button class="btn ghost" id="btn-settings">设置</button>
       </header>
+
+      <div id="download-panel" class="download-panel hidden">
+        <div class="download-head">
+          <b>下载</b>
+          <button class="btn tiny ghost" id="download-folder">打开目录</button>
+          <button class="btn tiny ghost" id="download-clear">清空</button>
+        </div>
+        <div id="download-list" class="download-list">
+          <div class="muted small">还没有下载</div>
+        </div>
+      </div>
 
       <main id="grid">
         <div id="tiles"></div>
