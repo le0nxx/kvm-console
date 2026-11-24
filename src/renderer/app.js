@@ -1606,7 +1606,7 @@ function bindSheets() {
       saveTextPresets(list);
     }
   });
-  async function runTerminal(): Promise<void> {
+  async function runTerminal() {
     const ids = dockIds();
     if (!ids.length) return toast('先勾选至少一台服务器', 'err');
     const command = el('term-command').value.trim();
