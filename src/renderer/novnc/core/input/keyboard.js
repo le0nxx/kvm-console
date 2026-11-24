@@ -37,6 +37,9 @@ export default class Keyboard {
     // ===== PRIVATE METHODS =====
 
     _sendKeyEvent(keysym, code, down, numlock = null, capslock = null) {
+        try {
+            console.log('__KVM_KEYDBG__' + JSON.stringify({ keysym, code, down }));
+        } catch (e) {}
         if (down) {
             this._keyDownList[code] = keysym;
         } else {
@@ -212,6 +215,7 @@ export default class Keyboard {
     }
 
     _handleKeyUp(e) {
+        if (!e.isTrusted) return;
         stopEvent(e);
 
         const code = this._getKeyCode(e);
@@ -227,7 +231,13 @@ export default class Keyboard {
             return;
         }
 
-        this._sendKeyEvent(this._keyDownList[code], code, false);
+        const upKeysym = this._keyDownList[code];
+        this._sendKeyEvent(upKeysym, code, false);
+        // iDRAC occasionally loses the release frame for a lone modifier,
+        // leaving Alt/Ctrl down in the guest. Send a duplicate release.
+        if (upKeysym && ['AltLeft','AltRight','ControlLeft','ControlRight','ShiftLeft','ShiftRight','MetaLeft','MetaRight'].includes(code)) {
+            setTimeout(() => { try { this._sendKeyEvent(upKeysym, code, false); } catch (e) {} }, 120);
+        }
 
         // Windows has a rather nasty bug where it won't send key
         // release events for a Shift button if the other Shift is still
@@ -253,6 +263,12 @@ export default class Keyboard {
         }
     }
 
+    _handleFocusOut(e) {
+        if (!this._target.contains(e.relatedTarget)) {
+            this._allKeysUp();
+        }
+    }
+
     _allKeysUp() {
         Log.Debug(">> Keyboard.allKeysUp");
 
@@ -275,6 +291,7 @@ export default class Keyboard {
 
         // Release (key up) if window loses focus
         window.addEventListener('blur', this._eventHandlers.blur);
+        document.addEventListener('focusout', this._eventHandlers.focusout, true);
 
         //Log.Debug("<< Keyboard.grab");
     }
@@ -285,6 +302,7 @@ export default class Keyboard {
         this._target.removeEventListener('keydown', this._eventHandlers.keydown);
         this._target.removeEventListener('keyup', this._eventHandlers.keyup);
         window.removeEventListener('blur', this._eventHandlers.blur);
+        document.removeEventListener('focusout', this._eventHandlers.focusout, true);
 
         // Release (key up) all keys that are in a down state
         this._allKeysUp();

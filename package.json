@@ -1,6 +1,6 @@
 {
   "name": "kvm-console",
-  "version": "2.0.11",
+  "version": "2.1.0",
   "private": true,
   "description": "Multi-session web KVM console for Huawei/xFusion iBMC, Dell iDRAC and Inspur BMCs",
   "main": "dist/main/main.js",
@@ -78,7 +78,16 @@
         "libxtst",
         "alsa-lib"
       ]
-    }
+    },
+    "extraResources": [
+      {
+        "from": "vendor/win-tools",
+        "to": "tools/win",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
   },
   "desktopName": "kvm-console",
   "license": "MIT"

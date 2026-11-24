@@ -28,6 +28,7 @@ KVM Console 用**连接历史 + 网段扫描**代替设备台账，不强制命�
 | 网段扫描 | ARP + TCP 443/80 + Redfish 身份 + 默认凭据验证，结果逐台出现 |
 | 快速连接 | 搜索历史与已打开会话；↑/↓ 选择、Enter 打开、Delete 删除 |
 | 文本/按键 | 文本、预设（点击直接发送）、常用组合键，支持多目标 |
+| CLI 终端 | 对勾选的多台 BMC 批量执行 `racadm` / `ipmitool` 命令，逐台输出结果 |
 | 广播 | 将普通按键和 Shift 组合同步到勾选的目标，带目标选择 |
 | 虚拟媒体 | 戴尔走 Redfish；华为/超聚变走 iBMC 网页本地上传 |
 | 电源 | 开机/软关机/强制关机/软重启/强制重启/NMI，全部二次确认 |
@@ -88,6 +89,7 @@ npm run demo
 | 扫描网段 | `Ctrl+Shift+S` |
 | 重连 | `Ctrl+Shift+R` |
 | 文本/快捷键 | `Ctrl+Shift+I` |
+| CLI 终端 | `Ctrl+Shift+X` |
 | 虚拟媒体 | `Ctrl+Shift+V` |
 | 广播 | `Ctrl+Shift+B` |
 | 电源 | `Ctrl+Shift+P` |
@@ -105,6 +107,19 @@ npm run demo
 
 - [使用文档](docs/USAGE.md)
 - [HTML 版](docs/USAGE.html)
+
+## CLI 终端
+
+顶栏「终端」打开后，会沿用当前勾选的目标，选择 `racadm` 或 `ipmitool` 输入命令；命令逐台执行，输出按主机分段显示。
+
+Windows 安装包从 `resources/tools/win/` 读取 `racadm.exe` 和 `ipmitool.exe`。Dell 的 `racadm.exe` 属于厂商工具，仓库不直接分发；构建前需把授权获得的二进制放入 `vendor/win-tools/`：
+
+```text
+vendor/win-tools/racadm.exe
+vendor/win-tools/ipmitool.exe
+```
+
+Linux 开发环境使用系统 `racadm` / `ipmitool`。
 
 ## 数据与安全
 

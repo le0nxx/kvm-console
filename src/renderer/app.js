@@ -629,7 +629,7 @@ function renderDock() {
     for (const tab of dock.querySelectorAll('.dock-tab')) {
       tab.classList.toggle('on', tab.dataset.panel === dockPanel);
     }
-    for (const panel of ['input', 'media', 'power', 'broadcast', 'reconnect']) {
+    for (const panel of ['input', 'media', 'power', 'broadcast', 'reconnect', 'terminal']) {
       const node = el(`dock-panel-${panel}`);
       if (node) node.classList.toggle('hidden', !!sidePanel || panel !== dockPanel);
     }
@@ -1135,6 +1135,10 @@ function fillLandingDefaults() {
 function bindTopbar() {
   el('btn-connect').addEventListener('click', () => openSide('connect'));
   el('btn-scan').addEventListener('click', () => openSide('scan'));
+  el('btn-terminal').addEventListener('click', () => {
+    openDock('terminal');
+    setTimeout(() => el('term-command')?.focus(), 120);
+  });
   el('btn-media').addEventListener('click', () => openDock('media'));
   el('btn-input').addEventListener('click', () => openDock('input'));
   el('btn-power').addEventListener('click', () => openDock('power'));
@@ -1602,6 +1606,41 @@ function bindSheets() {
       saveTextPresets(list);
     }
   });
+  async function runTerminal(): Promise<void> {
+    const ids = dockIds();
+    if (!ids.length) return toast('先勾选至少一台服务器', 'err');
+    const command = el('term-command').value.trim();
+    if (!command) return toast('请输入命令', 'err');
+    const tool = el('term-tool').value;
+    const out = el('term-output');
+    const run = el('term-run');
+    run.disabled = true;
+    out.textContent += `\n\n$ ${tool} ${command}\n`;
+    let ok = 0;
+    for (const id of ids) {
+      const session = sessions().find((s) => s.id === id);
+      out.textContent += `\n[${session?.host || id}]\n`;
+      // eslint-disable-next-line no-await-in-loop
+      const res = await api.runTool(id, tool, command);
+      out.textContent += (res?.output || res?.error || '(无输出)') + '\n';
+      if (res?.ok) ok += 1;
+      out.scrollTop = out.scrollHeight;
+    }
+    run.disabled = false;
+    out.scrollTop = out.scrollHeight;
+    toast(`执行完成：${ok}/${ids.length} 台成功`, ok === ids.length ? 'ok' : 'err');
+  }
+  el('term-run').addEventListener('click', () => void runTerminal());
+  el('term-command').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      void runTerminal();
+    }
+  });
+  el('term-clear').addEventListener('click', () => {
+    el('term-output').textContent = '$ 等待命令';
+  });
+
   el('dock-send').addEventListener('click', () => void sendDockText(el('dock-text').value));
   el('dock-keys').addEventListener('click', async (e) => {
     const btn = e.target.closest('button[data-combo]');
@@ -1785,6 +1824,7 @@ api.onShortcut?.((name) => {
     if (name === 'launcher') openSide('launcher');
     if (name === 'connect') openSide('connect');
     if (name === 'media') openDock('media');
+    if (name === 'terminal') openDock('terminal');
     if (name === 'scan') openSide('scan');
     if (name === 'input') openDock('input');
     if (name === 'power') openDock('power');

@@ -12,6 +12,7 @@ export const SHORTCUT_DEFS: ShortcutDef[] = [
   { id: 'reconnect.panel', label: '重连', group: '功能', fallback: 'Ctrl+Shift+R' },
   { id: 'panel.input', label: '文本/快捷键', group: '功能', fallback: 'Ctrl+Shift+I' },
   { id: 'panel.media', label: '虚拟媒体', group: '功能', fallback: 'Ctrl+Shift+V' },
+  { id: 'panel.terminal', label: '终端', group: '功能', fallback: 'Ctrl+Shift+X' },
   { id: 'panel.broadcast', label: '广播', group: '功能', fallback: 'Ctrl+Shift+B' },
   { id: 'panel.power', label: '电源', group: '功能', fallback: 'Ctrl+Shift+P' },
   { id: 'panel.settings', label: '设置', group: '功能', fallback: 'Ctrl+Shift+Alt+S' },

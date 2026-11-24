@@ -1052,3 +1052,32 @@ html[data-theme="light"] .pill.cred-unknown { color: #9a6700; border-color: #e3c
 .launcher-del:hover { color: var(--err); border-color: rgba(218,68,83,.5); background: rgba(218,68,83,.12); }
 
 #sheet-shortcuts { overflow-y: auto; padding: 14px 16px; }
+
+/* CLI terminal */
+.terminal-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.terminal-bar select {
+  width: 118px;
+  flex: none;
+}
+.terminal-bar input {
+  flex: 1;
+  min-width: 0;
+  font-family: "JetBrains Mono", "Cascadia Code", monospace;
+}
+.terminal-output {
+  margin: 10px 0 0;
+  padding: 12px;
+  height: 230px;
+  overflow: auto;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #070b12;
+  color: #cfe3ff;
+  font: 12px/1.55 "JetBrains Mono", "Cascadia Code", monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

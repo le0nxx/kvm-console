@@ -46,6 +46,9 @@ const api = {
   reloadUi: () => ipcRenderer.invoke('ui:reload'),
   setBroadcast: (args: { on: boolean; targets?: string[] }) => ipcRenderer.invoke('ui:broadcast', args),
   typeText: (id: string, text: string) => ipcRenderer.invoke('session:typeText', id, text),
+  toolsAvailable: () => ipcRenderer.invoke('tools:available'),
+  runTool: (id: string, tool: 'racadm' | 'ipmitool', command: string) =>
+    ipcRenderer.invoke('tools:run', id, tool, command),
   combo: (id: string, keys: string[]) => ipcRenderer.invoke('session:combo', id, keys),
   setLayout: (cols: number, rows: number) => ipcRenderer.invoke('ui:layout', cols, rows),
   setGrid: (rect: { x: number; y: number; width: number; height: number }) => ipcRenderer.send('ui:grid', rect),

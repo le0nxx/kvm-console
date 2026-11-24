@@ -40,6 +40,21 @@ export interface SessionHooks {
   onShortcutInput?: (input: { control: boolean; shift: boolean; alt: boolean; meta: boolean; key: string; code?: string }) => void;
 }
 
+function debugSession(entry: Record<string, unknown>): void {
+  try {
+    fs.appendFileSync(
+      path.join(app.getPath('userData'), 'debug.log'),
+      `${new Date().toISOString()} ${JSON.stringify(entry)}\n`,
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+function wcFocus(wc: Electron.WebContents): void {
+  try { wc.focus(); } catch { /* ignore */ }
+}
+
 export class KvmSession {
   readonly id: string;
   readonly device: Device;
@@ -135,7 +150,7 @@ export class KvmSession {
               try {
                 console.log('__KVM_KEY__' + JSON.stringify({
                   control: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey,
-                  key: e.key, code: e.code
+                  key: e.key, code: e.code, trusted: e.isTrusted
                 }));
               } catch (err) {}
             }, true);
@@ -155,7 +170,16 @@ export class KvmSession {
     });
     wc.on('console-message', (event: any, _level: any, message: any) => {
       const text = typeof message === 'string' ? message : event?.message;
-      if (typeof text !== 'string' || !text.startsWith('__KVM_KEY__')) return;
+      if (typeof text !== 'string') return;
+      debugSession({ event: 'console', id: this.id, text: text.slice(0, 500) });
+      if (text.startsWith('__KVM_KEYDBG__')) {
+        this.hooks.onShortcutInput?.({
+          control: false, shift: false, alt: false, meta: false,
+          key: '__debug', code: text.slice('__KVM_KEYDBG__'.length),
+        });
+        return;
+      }
+      if (!text.startsWith('__KVM_KEY__')) return;
       try {
         const input = JSON.parse(text.slice('__KVM_KEY__'.length));
         this.hooks.onShortcutInput?.(input);
@@ -331,15 +355,31 @@ export class KvmSession {
     if (this.disposed) return;
     this.state = state;
     this.detail = detail;
+    debugSession({ event: 'state', id: this.id, state, detail, url: this.safeUrl() });
     // The KVM page replaces the dashboard/login page; zoom computed for those
     // pages is wrong, so refit as soon as the console surface is ready.
     if ((state === 'ready' || state === 'manual') && this.lastRect) {
       this.scheduleFit(this.lastRect, true);
     }
+    if (state === 'ready') {
+      setTimeout(() => {
+        try {
+          wcFocus(this.view.webContents);
+        } catch {
+          /* ignore */
+        }
+        void this.run('(() => { const c = document.querySelector("canvas"); if (c) { c.setAttribute("tabindex", "0"); c.focus(); } return true; })()', 1200)
+          .catch(() => undefined)
+          .finally(() => {
+            if (this.device.vendor === 'dell') void this.captureDebugShots();
+          });
+      }, 500);
+    }
     this.hooks.onUpdate(this);
   }
 
   async start(): Promise<void> {
+    debugSession({ event: 'start', id: this.id, host: this.device.host, vendor: this.device.vendor, mode: this.device.mode });
     if (this.running || this.disposed) return;
     this.running = true;
     this.limitRetried = false;
@@ -374,6 +414,7 @@ export class KvmSession {
       this.setState('login', '正在自动登录');
       const tLogin = Date.now();
       const login = await this.autoLogin();
+      debugSession({ event: 'auto-login', id: this.id, result: login });
       if (login === 'manual') {
         if (this.state !== 'error') this.setState('manual', this.detail || '请手动登录');
         this.watchManualLogin();
@@ -1439,6 +1480,38 @@ export class KvmSession {
     this.lastVisible = visible;
   }
 
+  /** Reset guest modifier state through the RFB instance itself (works even
+   *  when the canvas is not focused). */
+  private async resetGuestKeyboard(): Promise<void> {
+    const ok = await this.run(
+      `(() => {
+        const r = window.__rfb;
+        if (!r || typeof r.sendKey !== 'function') return false;
+        const mods = [[0xffe9,'AltLeft'],[0xffe3,'ControlLeft'],[0xffe1,'ShiftLeft'],[0xffe7,'MetaLeft']];
+        for (const [ks, code] of mods) {
+          try { r.sendKey(ks, code, true); r.sendKey(ks, code, false); } catch (e) {}
+        }
+        return true;
+      })()`,
+      1500,
+    ).catch(() => undefined);
+    debugSession({ event: 'reset-keyboard', id: this.id, ok });
+  }
+
+  /** Force a known-up modifier state in the guest (down+up pair). */
+  releaseModifiers(): void {
+    const wc = this.view.webContents;
+    if (wc.isDestroyed()) return;
+    for (const key of ['Alt', 'Control', 'Shift', 'Meta']) {
+      try {
+        wc.sendInputEvent({ type: 'keyDown', keyCode: key });
+        wc.sendInputEvent({ type: 'keyUp', keyCode: key });
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
   typeText(text: string): void {
     const wc = this.view.webContents;
     wc.focus();
@@ -2161,6 +2234,33 @@ export class KvmSession {
     };
   }
 
+  private async captureDebugShots(): Promise<void> {
+    try {
+      const dir = path.join(app.getPath('userData'), 'debug-shots');
+      fs.mkdirSync(dir, { recursive: true });
+      for (let i = 0; i < 12; i += 1) {
+        await sleep(800);
+        if (this.disposed) return;
+        const img = await this.view.webContents.capturePage().catch(() => null);
+        if (img && !img.isEmpty()) {
+          fs.writeFileSync(path.join(dir, `${this.id}-${String(i).padStart(2, '0')}.png`), img.toPNG());
+        }
+      }
+      debugSession({ event: 'debug-shots-done', id: this.id });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private safeUrl(): string {
+    try {
+      const u = new URL(this.view.webContents.getURL());
+      return `${u.origin}${u.pathname}`;
+    } catch {
+      return '';
+    }
+  }
+
   async capture(): Promise<Buffer | null> {
     if (this.disposed) return null;
     try {
@@ -2197,29 +2297,34 @@ export class KvmSession {
     } catch {
       /* ignore */
     }
-    const wc = this.view.webContents;
+    const views = [this.view, this.webView].filter(Boolean) as WebContentsView[];
+    this.webView = null;
     let closed = false;
     const finish = () => {
       if (closed) return;
       closed = true;
-      try {
-        this.win.contentView.removeChildView(this.view);
-      } catch {
-        /* ignore */
-      }
-      try {
-        wc.close();
-      } catch {
-        /* ignore */
+      for (const v of views) {
+        try {
+          this.win.contentView.removeChildView(v);
+        } catch {
+          /* ignore */
+        }
+        try {
+          if (!v.webContents.isDestroyed()) v.webContents.close();
+        } catch {
+          /* ignore */
+        }
       }
     };
-    if (wc.isDestroyed()) {
+    if (views.every((v) => v.webContents.isDestroyed())) {
       finish();
       return;
     }
-    wc.loadURL('about:blank')
-      .catch(() => undefined)
-      .finally(() => setTimeout(finish, 200));
+    for (const v of views) {
+      if (v.webContents.isDestroyed()) continue;
+      v.webContents.loadURL('about:blank').catch(() => undefined);
+    }
+    setTimeout(finish, 200);
     setTimeout(finish, 1200);
   }
 }

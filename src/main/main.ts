@@ -36,6 +36,7 @@ import { startMockBmc, type MockBmc } from './mock';
 import { hostCount, localSubnets, scanSubnet } from './scanner';
 import { ensureDellLicense, installLicenseFile } from './dell-license';
 import { VncBridge } from './vnc';
+import { runBmcTool, toolsAvailable } from './tools';
 import { RedfishClient } from './redfish';
 import type { KvmSession } from './session';
 
@@ -550,6 +551,7 @@ function runShortcut(action: string): void {
     'panel.scan': 'scan',
     'panel.history': 'history',
     'panel.media': 'media',
+    'panel.terminal': 'terminal',
     'panel.input': 'input',
     'panel.power': 'power',
     'panel.broadcast': 'broadcast',
@@ -601,6 +603,9 @@ function wireShortcuts(wc: WebContents): void {
   let forwardUntil = 0;
   wc.on('before-input-event', (event, input) => {
     if (Date.now() < forwardUntil) return;
+    if (wc !== shellView?.webContents) {
+      debugShortcut({ src: 'input', type: input.type, key: input.key, code: input.code, control: input.control, shift: input.shift, alt: input.alt, meta: input.meta });
+    }
     if (input.type === 'keyDown' && (input.control || input.alt || input.meta)) {
       debugShortcut({ src: 'before', key: input.key, code: input.code, control: input.control, shift: input.shift, alt: input.alt, meta: input.meta });
     }
@@ -610,14 +615,9 @@ function wireShortcuts(wc: WebContents): void {
     if (isBrowserShortcut(input)) {
       event.preventDefault();
       const isShell = shellView && wc === shellView.webContents;
-      if (!isShell) {
-        forwardUntil = Date.now() + 40;
-        wc.sendInputEvent({
-          type: input.type as 'keyDown' | 'keyUp',
-          keyCode: input.key,
-          modifiers: input.modifiers as never,
-        });
-      }
+      // Do not synthesize the key back into the page. Doing so duplicated
+      // modifier/key state in Dell's viewer and produced stray ESC sequences
+      // (e.g. ^[1) in the guest console.
       return;
     }
     if (
@@ -999,6 +999,19 @@ function registerIpc(): void {
     return manager.get(id)?.focusConsole() ?? false;
   });
 
+  ipcMain.handle('tools:available', () => toolsAvailable());
+  ipcMain.handle('tools:run', async (_e, id: string, tool: 'racadm' | 'ipmitool', command: string) => {
+    const session = manager.get(id);
+    if (!session) return { ok: false, code: null, output: '', error: '会话不存在' };
+    const password = store.passwordOf(id) || store.passwordOf(session.device.id);
+    if (!password) return { ok: false, code: null, output: '', error: '没有保存的密码' };
+    return runBmcTool(tool, {
+      host: session.device.host,
+      username: session.device.username,
+      password,
+    }, command);
+  });
+
   ipcMain.handle('session:typeText', (_e, id: string, text: string) => {
     const session = manager.get(id);
     if (!session) return false;
@@ -1028,6 +1041,10 @@ function registerIpc(): void {
   ipcMain.handle('session:web', (_e, id: string) => {
     const session = manager.get(id);
     if (!session) return false;
+    if (mode === 'grid') {
+      setMode('focus', id);
+      return applyWeb(id, true);
+    }
     return applyWeb(id, !session.webOpen);
   });
 

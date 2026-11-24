@@ -3,7 +3,17 @@ import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import os from 'node:os';
 import { WebSocketServer, WebSocket } from 'ws';
+
+function traceWire(dir: 'c2s' | 's2c', data: Buffer): void {
+  try {
+    const line = `${new Date().toISOString()} ${dir} len=${data.length} ${data.subarray(0, 48).toString('hex')}\n`;
+    fs.appendFileSync(path.join(os.homedir(), '.config', 'kvm-console', 'wire-debug.log'), line);
+  } catch {
+    /* ignore */
+  }
+}
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -79,6 +89,7 @@ export class VncBridge {
         });
         upstream.on('message', (data) => {
           const buf = Buffer.from(data as Buffer);
+          if (buf[0] !== 0xf7) traceWire('s2c', buf);
           if (buf[0] === 0xf7) {
             if (buf[1] === 0xb3) upstream.send(key2Frame);
             return; // Dell control frames are not RFB
@@ -90,7 +101,9 @@ export class VncBridge {
           }
         });
         ws.on('message', (data) => {
-          if (upstream.readyState === WebSocket.OPEN) upstream.send(data as Buffer);
+          const buf = Buffer.from(data as Buffer);
+          traceWire('c2s', buf);
+          if (upstream.readyState === WebSocket.OPEN) upstream.send(buf);
         });
         ws.on('close', () => upstream.close());
         upstream.on('close', () => {
