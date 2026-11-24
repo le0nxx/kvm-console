@@ -114,6 +114,10 @@ npm run demo
 
 Windows 安装包已内置 `resources/tools/win/racadm.exe` 和 `ipmitool.exe`；Linux 开发环境使用系统 `racadm` / `ipmitool`。
 
+## Windows 安装器
+
+安装器使用 Inno Setup，可选择是否创建桌面/开始菜单快捷方式。构建见 [Windows 安装器](docs/WINDOWS-INSTALLER.md)。
+
 ## Windows 签名
 
 开源项目可申请 SignPath 免费签名；也支持 PFX 和 Azure Trusted Signing。步骤见 [Windows 签名](docs/WINDOWS-SIGNING.md)。

@@ -132,3 +132,30 @@ Get-AuthenticodeSignature .\KVM-Console-2.3.1-win-x64-portable.exe
 - PFX、密码、SignPath token 不要提交到 Git；
 - SmartScreen 信誉需要时间积累，签名不等于立即无警告；
 - 不要用自签名证书发布给外部用户。
+
+## Inno Setup 安装器签名
+
+本项目 Windows 安装器使用 `build/installer.iss`。签名时在 `[Setup]` 增加：
+
+```ini
+SignTool=signtool
+SignedUninstaller=yes
+```
+
+在 `[Setup]` 之外定义：
+
+```ini
+[Setup]
+; ...
+```
+
+实际 Inno 的签名命令通过 `SignTool` 指令配置，例如：
+
+```ini
+[Setup]
+SignTool=signtool sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f "C:\secure\kvm-console.pfx" /p "$p" $f
+```
+
+`$f` 是待签名文件，`$p` 会提示输入证书密码。签名后重新运行 Inno 编译。
+
+SignPath 的流程相同：先构建未签名安装器，再上传给 SignPath 签名。
