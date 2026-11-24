@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import type { Device, DownloadEvent, Rect, SessionSnapshot, SessionState } from './types';
-import { VENDORS } from './store';
 import { clearDellSessions } from './dell-session';
 import { ensureDellVnc } from './dell-vnc';
 import { RedfishClient, type RedfishCollection } from './redfish';
@@ -706,21 +705,9 @@ export class KvmSession {
     return 'not-found';
   }
 
-  private resolveCredentials(pageTitle: string): { username: string; password: string } {
-    let vendor = this.device.vendor;
-    if (vendor === 'generic') {
-      const t = pageTitle.toLowerCase();
-      if (/xfusion|fusion/.test(t)) vendor = 'xfusion';
-      else if (/ibmc|huawei/.test(t)) vendor = 'huawei';
-      else if (/idrac|dell/.test(t)) vendor = 'dell';
-      else if (/isbmc|inspur/.test(t)) vendor = 'inspur';
-    }
-    const preset = VENDORS.find((v) => v.id === vendor);
-    const fallback = preset?.defaults[0];
-    return {
-      username: this.device.username || fallback?.u || '',
-      password: this.password || fallback?.p || '',
-    };
+  /** Credentials for the login form: whatever the user saved, never a built-in default. */
+  private resolveCredentials(): { username: string; password: string } {
+    return { username: this.device.username || '', password: this.password || '' };
   }
 
   private async autoLogin(): Promise<'ok' | 'manual'> {
@@ -746,7 +733,7 @@ export class KvmSession {
     // iDRAC: all GUI sessions occupied -> kick them once, then retry login.
     const limited = await this.run<boolean>(sessionLimitScript(), 2500);
     if (limited) {
-      const pre = this.resolveCredentials(String(probe.title || ''));
+      const pre = this.resolveCredentials();
       if (this.device.vendor === 'dell' && pre.username && pre.password && !this.limitRetried) {
         this.limitRetried = true;
         const cleanup = await clearDellSessions(this.device, pre.password);
@@ -764,13 +751,9 @@ export class KvmSession {
       return 'manual';
     }
 
-    // Credentials may be missing (e.g. connected from scan without a match) or
-    // only half-filled. Fall back to the vendor's first default pair — one
-    // attempt only, never a brute-force loop.
-    // Re-read the title: Angular/iBMC sets <title> after bootstrap, so the
-    // value captured right after load is often empty.
-    const titled = await this.run<LoginProbe>(probeScript(), 4000);
-    const creds = this.resolveCredentials(String(titled?.title || probe.title || ''));
+    // Only the saved connection credentials are used; there are no built-in
+    // default pairs to fall back to.
+    const creds = this.resolveCredentials();
     this.loginUser = creds.username;
     this.loginPass = creds.password;
     if (!this.loginUser || !this.loginPass) {

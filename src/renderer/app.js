@@ -62,39 +62,54 @@ let connectPrefill = null;
 let pendingSerial = '';
 const lastLicense = new Map();
 
-const BUILTIN_CREDS = [
-  { u: 'Administrator', p: 'Admin@9000', label: '华为 / 超聚变' },
-  { u: 'admin', p: 'Admin@9000', label: '华为（新固件）' },
-  { u: 'root', p: 'calvin', label: '戴尔 iDRAC' },
-  { u: 'admin', p: 'admin', label: '浪潮 ISBMC' },
-  { u: 'superuser', p: 'superuser', label: '浪潮（旧）' },
-];
+/* Credential presets: a fixed number of slots, so saved pairs keep their
+   position instead of shifting when one is deleted. No built-in credentials. */
+const PRESET_SLOTS = 6;
+const CRED_PRESET_KEY = 'kvm-cred-presets';
 
-function customCreds() {
+function credSlots() {
+  let saved = [];
   try {
-    const list = JSON.parse(localStorage.getItem('kvm-cred-presets') || '[]');
-    return Array.isArray(list) ? list.filter((c) => c && c.u && c.p) : [];
+    const parsed = JSON.parse(localStorage.getItem(CRED_PRESET_KEY) || '[]');
+    if (Array.isArray(parsed)) saved = parsed;
   } catch {
-    return [];
+    /* ignore broken storage */
   }
+  const slots = [];
+  for (let i = 0; i < PRESET_SLOTS; i += 1) {
+    const item = saved[i];
+    slots.push(item && item.u && item.p ? { u: String(item.u), p: String(item.p) } : null);
+  }
+  return slots;
+}
+
+function writeCredSlots(slots) {
+  localStorage.setItem(CRED_PRESET_KEY, JSON.stringify(slots.slice(0, PRESET_SLOTS)));
 }
 
 function renderPresets() {
-  const custom = customCreds();
-  const html =
-    BUILTIN_CREDS.map(
-      (c) => `<span class="preset-chip" data-u="${esc(c.u)}" data-p="${esc(c.p)}" title="${esc(c.label)}">${esc(c.u)} : ${esc(c.p)}</span>`,
-    ).join('') +
-    custom
-      .map(
-        (c, i) =>
-          `<span class="preset-chip custom" data-u="${esc(c.u)}" data-p="${esc(c.p)}">${esc(c.u)} : ${esc(c.p)}<b class="del" data-del="${i}" title="删除这个预设">×</b></span>`,
-      )
-      .join('');
+  const html = credSlots()
+    .map((c, i) =>
+      c
+        ? `<span class="preset-chip custom" data-slot="${i}" data-u="${esc(c.u)}" data-p="${esc(c.p)}">${esc(c.u)} : ${esc(c.p)}<b class="del" data-del="${i}" title="${esc(t('删除这个预设'))}">×</b></span>`
+        : `<span class="preset-chip preset-empty" data-slot="${i}" title="${esc(t('点击把当前用户名和密码存到这个位置'))}">${esc(t('空位'))}</span>`,
+    )
+    .join('');
   for (const id of ['l-presets', 'c-presets']) {
     const box = el(id);
     if (box) box.innerHTML = html;
   }
+}
+
+function storeCredSlot(prefix, index) {
+  const u = el(`${prefix}-username`).value.trim();
+  const p = el(`${prefix}-password`).value;
+  if (!u || !p) return toast('先填好用户名和密码，再存为预设', 'err');
+  const slots = credSlots();
+  slots[index] = { u, p };
+  writeCredSlots(slots);
+  renderPresets();
+  return toast('已保存为快速预设', 'ok');
 }
 
 function fillConnectForm(v) {
@@ -112,14 +127,13 @@ function fillConnectForm(v) {
 }
 
 function openConnectFor(host, mode = 'auto') {
-  const preset = (state.vendors || []).find((v) => v.id === (host.vendor || 'generic'))?.defaults?.[0];
   connectPrefill = {
     host: host.ip,
     port: host.port || 443,
     scheme: host.scheme || 'https',
     vendor: host.vendor || 'generic',
-    username: host.credential?.username || preset?.u || '',
-    password: host.credential?.password || preset?.p || '',
+    username: host.credential?.username || '',
+    password: host.credential?.password || '',
     name: host.model || host.title || '',
     serial: host.serial || '',
     mode,
@@ -134,25 +148,20 @@ function savePreset(prefix) {
     toast('先填好用户名和密码，再存为预设', 'err');
     return;
   }
-  const custom = customCreds();
-  const exists =
-    custom.some((c) => c.u === u && c.p === p) || BUILTIN_CREDS.some((c) => c.u === u && c.p === p);
-  if (!exists) custom.push({ u, p });
-  localStorage.setItem('kvm-cred-presets', JSON.stringify(custom));
+  const slots = credSlots();
+  if (slots.some((c) => c && c.u === u && c.p === p)) {
+    toast('该组合已在预设里', 'ok');
+    return;
+  }
+  const free = slots.indexOf(null);
+  if (free < 0) {
+    toast('预设已满，先删掉一个', 'err');
+    return;
+  }
+  slots[free] = { u, p };
+  writeCredSlots(slots);
   renderPresets();
-  toast(exists ? '该组合已在预设里' : '已保存为快速预设', 'ok');
-}
-
-function vendorDefault(vendorId) {
-  return (state.vendors || []).find((v) => v.id === vendorId)?.defaults?.[0] || null;
-}
-
-/** switching vendor overwrites user/password with that vendor's default pair */
-function applyVendorDefaults(prefix) {
-  const d = vendorDefault(el(`${prefix}-vendor`).value);
-  if (!d) return;
-  el(`${prefix}-username`).value = d.u;
-  el(`${prefix}-password`).value = d.p;
+  toast('已保存为快速预设', 'ok');
 }
 
 const esc = (s) =>
@@ -480,7 +489,6 @@ function renderLanding() {
 
   if (!landingDone) {
     landingDone = true;
-    fillLandingDefaults();
     setTimeout(() => el('l-host').focus(), 40);
   }
 }
@@ -695,7 +703,6 @@ function resetConnectForm() {
   pendingSerial = '';
   el('connect-msg').textContent = '';
   fillVendorInfo(firstVendor);
-  fillConnectDefaults();
   updateLicenseBox();
 }
 
@@ -828,10 +835,7 @@ api.onPanel?.((payload) => {
         if (pw && !el('c-password').value) el('c-password').value = pw;
       });
     }
-    if (!el('c-vendor').value) {
-      fillVendorInfo(el('c-vendor').value);
-      fillConnectDefaults();
-    }
+    fillVendorInfo(el('c-vendor').value);
     setTimeout(() => el('c-host')?.focus(), 30);
   }
   if (sidePanel !== 'shortcuts' && shortcutCaptureId) {
@@ -1051,12 +1055,6 @@ function renderVendorOptions() {
 function fillVendorInfo(vendorId) {
   const vendor = (state.vendors || []).find((v) => v.id === vendorId);
   el('c-hint').textContent = vendor ? vendor.hint : '';
-  el('c-defaults').innerHTML = (vendor?.defaults || [])
-    .map(
-      (d) =>
-        `<span class="cred-chip" data-u="${esc(d.u)}" data-p="${esc(d.p)}">${esc(d.u)} : ${esc(d.p)}</span>`,
-    )
-    .join('');
 }
 
 function connectPayloadFromSheet(ephemeral) {
@@ -1126,14 +1124,6 @@ async function landingConnect(ephemeral) {
   }
   el('landing-msg').textContent = '';
   el('l-password').value = '';
-}
-
-function fillConnectDefaults() {
-  applyVendorDefaults('c');
-}
-
-function fillLandingDefaults() {
-  applyVendorDefaults('l');
 }
 
 /* ------------------------------------------------------------------ bind */
@@ -1326,7 +1316,7 @@ function bindTopbar() {
 
   el('btn-landing-connect').addEventListener('click', () => landingConnect(false));
   el('btn-landing-only').addEventListener('click', () => landingConnect(true));
-  el('l-vendor').addEventListener('change', fillLandingDefaults);
+  el('l-vendor').addEventListener('change', () => fillVendorInfo(el('c-vendor').value));
   el('l-save-preset').addEventListener('click', () => savePreset('l'));
   el('c-save-preset').addEventListener('click', () => savePreset('c'));
   bindPresetBox('l-presets', 'l');
@@ -1497,7 +1487,6 @@ function bindSheets() {
   });
   el('c-vendor').addEventListener('change', () => {
     fillVendorInfo(el('c-vendor').value);
-    fillConnectDefaults();
     updateLicenseBox();
   });
   el('c-reset').addEventListener('click', resetConnectForm);
@@ -1521,13 +1510,6 @@ function bindSheets() {
     const file = e.dataTransfer?.files?.[0];
     if (file) void uploadLicenseFile(api.pathForFile(file) || file.path);
   });
-  el('c-defaults').addEventListener('click', (e) => {
-    const chip = e.target.closest('.cred-chip');
-    if (!chip) return;
-    el('c-username').value = chip.dataset.u;
-    el('c-password').value = chip.dataset.p;
-  });
-
   /* history */
   el('history-list')?.addEventListener('click', async (e) => {
     const btn = e.target.closest('button[data-act]');
@@ -1601,15 +1583,14 @@ function bindSheets() {
       return;
     }
     const vendor = host.vendor || 'generic';
-    const preset = (state.vendors || []).find((v) => v.id === vendor)?.defaults?.[0];
     const savedPass = saved ? await api.passwordFor(saved.host, saved.port) : '';
     const payload = {
       host: host.ip,
       port: host.port ?? 443,
       scheme: host.scheme ?? 'https',
       vendor,
-      username: host.credential?.username ?? saved?.username ?? preset?.u ?? '',
-      password: host.credential?.password ?? savedPass ?? preset?.p ?? '',
+      username: host.credential?.username ?? saved?.username ?? '',
+      password: host.credential?.password ?? savedPass ?? '',
       name: host.model || saved?.model || '',
       serial: host.serial || saved?.serial || undefined,
       mode: vnc ? 'vnc' : 'web',
@@ -1911,15 +1892,18 @@ function bindPresetBox(id, prefix) {
   box.addEventListener('click', (e) => {
     const del = e.target.closest('[data-del]');
     if (del) {
-      const idx = Number(del.dataset.del);
-      const custom = customCreds();
-      custom.splice(idx, 1);
-      localStorage.setItem('kvm-cred-presets', JSON.stringify(custom));
+      const slots = credSlots();
+      slots[Number(del.dataset.del)] = null;
+      writeCredSlots(slots);
       renderPresets();
       return;
     }
     const chip = e.target.closest('.preset-chip');
     if (!chip) return;
+    if (chip.classList.contains('preset-empty')) {
+      storeCredSlot(prefix, Number(chip.dataset.slot));
+      return;
+    }
     el(`${prefix}-username`).value = chip.dataset.u;
     el(`${prefix}-password`).value = chip.dataset.p;
   });
@@ -1950,15 +1934,14 @@ async function connectSelected() {
   for (const h of hosts) {
     const saved = savedDeviceFor(h.ip, h.port);
     const vendor = h.vendor || saved?.vendor || 'generic';
-    const preset = (state.vendors || []).find((v) => v.id === vendor)?.defaults?.[0];
     const savedPass = saved ? await api.passwordFor(saved.host, saved.port) : '';
     const res = await api.connect({
       host: h.ip,
       port: h.port ?? 443,
       scheme: h.scheme ?? 'https',
       vendor,
-      username: h.credential?.username ?? saved?.username ?? preset?.u ?? '',
-      password: h.credential?.password ?? savedPass ?? preset?.p ?? '',
+      username: h.credential?.username ?? saved?.username ?? '',
+      password: h.credential?.password ?? savedPass ?? '',
       name: h.model || saved?.model || '',
       serial: h.serial || saved?.serial || undefined,
       ephemeral: false,
