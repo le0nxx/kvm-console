@@ -156,6 +156,13 @@ KVM_DEBUG_CONSOLE=1 npm start    # 另外记录 BMC 页面的 console 输出
 KVM_DEBUG_VNC=1 npm start        # VNC 逐帧流量 → wire-debug.log
 ```
 
+发布到共享目录（按系统分 `Windows/`、`Linux/`、`Docs/`，并重算根目录 `SHA256SUMS`）：
+
+```bash
+./scripts/publish-share.sh              # 版本取自 package.json
+./scripts/publish-share.sh 2.3.3 /path/to/share
+```
+
 项目结构：
 
 ```
