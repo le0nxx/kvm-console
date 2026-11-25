@@ -64,6 +64,7 @@
     },
     "win": {
       "target": [
+        "nsis",
         "portable"
       ],
       "icon": "build/icon.ico"
@@ -86,7 +87,19 @@
           "**/*"
         ]
       }
-    ]
+    ],
+    "nsis": {
+      "artifactName": "KVM-Console-${version}-win-${arch}-setup.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "KVM Console"
+    },
+    "portable": {
+      "artifactName": "KVM-Console-${version}-win-${arch}-portable.${ext}"
+    }
   },
   "desktopName": "kvm-console",
   "license": "MIT"
