@@ -17,6 +17,7 @@ import {
   focusFieldScript,
   frameProbeScript,
   healthScript,
+  ibmcHtml5Script,
   kvmLimitScript,
   launchConsoleScript,
   launchKvmScript,
@@ -60,6 +61,14 @@ interface FrameProbe {
   kind?: string;
   w?: number;
   h?: number;
+}
+
+/** Result of ibmcHtml5Script: how the HTML5 console was reached, or why it was not. */
+interface Html5Probe {
+  ok?: boolean;
+  via?: 'route' | 'entry';
+  reason?: 'login' | 'busy' | 'no-h5' | 'no-canvas';
+  label?: string;
 }
 
 interface HealthProbe {
@@ -181,12 +190,17 @@ export class KvmSession {
   private loginUser = '';
   private loginPass = '';
   private limitRetried = false;
+  private jnlpRecovered = false;
   private consoleWin?: BrowserWindow;
   private crashCount = 0;
   private vncActive = false;
   private vncUrl?: string;
   private dellPopup: string | null = null;
-  private downloadHandler?: (_e: Electron.Event, item: Electron.DownloadItem) => void;
+  private downloadHandler?: (
+    event: Electron.Event,
+    item: Electron.DownloadItem,
+    source: Electron.WebContents,
+  ) => void;
   private manualTimer?: NodeJS.Timeout;
   private identityLearned = false;
   private lastBounds?: Rect;
@@ -299,12 +313,17 @@ export class KvmSession {
     wc.setZoomFactor(1);
     this.hookFrameShortcuts(wc);
 
-    this.downloadHandler = (_e, item) => {
+    this.downloadHandler = (_e, item, source) => {
       const url = item.getURL();
       const fileName = item.getFilename() || '';
+      // will-download is registered on the shared partition session, so filter
+      // by origin: another tab or the "open web" view must not touch this one.
+      const origin = source ?? null;
+      const fromWeb = Boolean(origin && this.webView && origin === this.webView.webContents);
+      if (origin && origin !== wc && !fromWeb) return;
       if (/\.jnlp(\?|$)/i.test(url) || /\.jnlp$/i.test(fileName)) {
         item.cancel();
-        this.setState('manual', '该 iBMC 只提供 Java KVM（kvm.jnlp），已阻止下载；请使用 HTML5 控制台或连接页的 VNC');
+        if (!fromWeb) void this.recoverFromJavaKvm();
         return;
       }
       let target = '';
@@ -493,6 +512,7 @@ export class KvmSession {
     this.running = true;
     this.startedAt = Date.now();
     this.limitRetried = false;
+    this.jnlpRecovered = false;
     this.vncActive = false;
     this.stopHealth();
     // Render the BMC UI at a desktop-ish CSS width even inside a small tile.
@@ -614,13 +634,13 @@ export class KvmSession {
       }
 
       this.setState('kvm', '正在进入 KVM');
-      await this.openKvm();
+      const opened = await this.openKvm();
       if (this.external) {
         // iDRAC console lives in its own window; the dashboard has no canvas.
         this.startHealth();
         return;
       }
-      await this.waitForFrame();
+      if (opened) await this.waitForFrame();
       this.startHealth();
     } catch (err) {
       this.setState('error', err instanceof Error ? err.message : String(err));
@@ -1136,45 +1156,74 @@ export class KvmSession {
     await sleep(1200);
     await this.autoLogin();
     await sleep(800);
-    await this.openKvm();
-    return true;
+    return this.openKvm();
   }
 
-  private async openKvm(): Promise<void> {
+  /**
+   * iBMC/xFusion: always enter the HTML5 console. The home page's console menu
+   * lists Java before HTML5 on some firmware, so it is never clicked; the
+   * injected script only picks an HTML5 entry and verifies the canvas.
+   */
+  private async openIbmcConsole(): Promise<boolean> {
+    const res = await this.run<Html5Probe>(ibmcHtml5Script(), 34000);
+    if (res?.ok) return true;
+
+    if (res?.reason === 'login') {
+      this.setState('manual', '登录状态已失效，请手动登录后重试');
+      this.watchManualLogin();
+      return false;
+    }
+    if (res?.reason === 'busy' || (await this.kvmLimitReached())) {
+      if (await this.kickAndRetryKvm()) return true;
+      this.detail = 'KVM 会话数已满，自动清理失败：请在 iBMC「用户与安全 → 在线用户」注销旧会话后重连';
+      this.setState('manual', this.detail);
+      return false;
+    }
+    if (res?.reason === 'no-h5') {
+      this.setState('manual', '该 iBMC 未提供 HTML5 控制台（固件仅有 Java KVM）；请升级 iBMC 固件或改用连接页的 VNC');
+      return false;
+    }
+    this.setState('manual', 'iBMC 控制台未启动，请检查 KVM 会话数后重试，或改用连接页的 VNC');
+    return false;
+  }
+
+  /** iBMC and xFusion iBMC share a UI; match the configured vendor or page title. */
+  private looksLikeIbmc(title: string): boolean {
+    return this.device.vendor === 'huawei' ||
+      this.device.vendor === 'xfusion' ||
+      /ibmc|huawei|xfusion|超聚变/i.test(title);
+  }
+
+  /** A Java console download means the HTML5 entry was skipped; switch back once. */
+  private async recoverFromJavaKvm(): Promise<void> {
+    if (this.disposed || this.state === 'ready' || this.vncActive) return;
+    if (this.jnlpRecovered) {
+      this.setState('manual', 'Java KVM（kvm.jnlp）已被拦截；请升级 iBMC 固件或改用连接页的 VNC');
+      return;
+    }
+    this.jnlpRecovered = true;
+    const probe = await this.run<LoginProbe>(probeScript(), 2500);
+    if (!this.looksLikeIbmc(String(probe?.title || ''))) {
+      this.setState('manual', '该管理页只提供 Java KVM（kvm.jnlp），已阻止下载；请使用 HTML5 控制台或连接页的 VNC');
+      return;
+    }
+    this.detail = '已拦截 Java 控制台（kvm.jnlp），正在切换到 HTML5 控制台…';
+    this.hooks.onUpdate(this);
+    if (await this.openIbmcConsole()) await this.waitForFrame();
+  }
+
+  /** Returns true when a console surface is expected to be present. */
+  private async openKvm(): Promise<boolean> {
     if (this.device.kvmUrl) {
       await this.load(this.device.kvmUrl);
-      return;
+      return true;
     }
 
     const probe = await this.run<LoginProbe>(probeScript(), 4000);
     const title = String(probe?.title || '');
-    const isIbmc =
-      /ibmc/i.test(title) || this.device.vendor === 'huawei' || this.device.vendor === 'xfusion';
-
-    if (isIbmc) {
-      // iBMC 3.x: /#/kvm_h5 is the HTML5 console. It is gated by two storage
-      // keys the home-page "Start" button sets; navigating directly avoids the
-      // menu entry that is often disabled.
-      const navigated = await this.run<boolean>(
-        `(() => {
-          try { sessionStorage.setItem('kvmConnect', '1'); } catch (e) {}
-          try { localStorage.setItem('H5ClientModel', 'Private'); } catch (e) {}
-          location.hash = '#/kvm_h5';
-          return true;
-        })()`,
-        5000,
-      );
-      if (navigated) {
-        await sleep(1800);
-        if (await this.kvmLimitReached()) {
-          if (await this.kickAndRetryKvm()) return;
-          this.detail = 'KVM 会话数已满，自动清理失败：请在 iBMC「用户与安全 → 在线用户」注销旧会话后重连';
-          this.setState('manual', this.detail);
-          return;
-        }
-        return;
-      }
-    }
+    // Huawei renames its BMC UI per generation; the title check keeps a device
+    // added as "通用" on the HTML5 path instead of the Java one.
+    if (this.looksLikeIbmc(title)) return this.openIbmcConsole();
 
     // Generic: click a console entry, in any frame. The dashboard is an SPA and
     // may still be rendering right after login, so poll for a while.
@@ -1187,7 +1236,7 @@ export class KvmSession {
       );
       if (started.some((r) => r?.ok)) {
         for (let k = 0; k < 20 && !this.external; k++) await sleep(500);
-        if (this.external) return;
+        if (this.external) return true;
       }
       const clicked = await Promise.all(
         this.framesInPage().map((frame) => this.frameExec<ClickResult>(frame, launchKvmScript(), 9000)),
@@ -1198,7 +1247,7 @@ export class KvmSession {
         await Promise.all(
           this.framesInPage().map((frame) => this.frameExec<ClickResult>(frame, launchConsoleScript(), 4000)),
         );
-        return;
+        return true;
       }
       await sleep(1000);
     }
@@ -1208,6 +1257,7 @@ export class KvmSession {
         ? `KVM 入口未找到：${license.note}`
         : '未找到 KVM 入口，请手动点击，或在连接里填写 KVM 地址';
     this.setState('manual', this.detail);
+    return false;
   }
 
   /** After a manual web login, go straight to the HTML5 console instead of clicking iBMC's Java/KVM entry. */
@@ -1232,8 +1282,7 @@ export class KvmSession {
       if (this.manualTimer) clearInterval(this.manualTimer);
       this.manualTimer = undefined;
       this.setState('kvm', '检测到登录成功，正在打开控制台');
-      await this.openKvm();
-      await this.waitForFrame();
+      if (await this.openKvm()) await this.waitForFrame();
     }, 2000);
   }
 

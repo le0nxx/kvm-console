@@ -1,4 +1,4 @@
-# KVM Console 2.3.3 使用说明
+# KVM Console 2.3.4 使用说明
 
 多路网页 KVM 控制台，支持华为/超聚变 iBMC、戴尔 iDRAC、浪潮 ISBMC 及通用 BMC。
 
@@ -7,7 +7,7 @@
 ### Linux（Arch）
 
 ```bash
-sudo pacman -U kvm-console-2.3.3-1-x86_64.pkg.tar.zst
+sudo pacman -U kvm-console-2.3.4-1-x86_64.pkg.tar.zst
 kvm-console
 ```
 
@@ -142,8 +142,10 @@ BMC 页面触发的下载：
 
 ### 华为 iBMC 弹 kvm.jnlp
 
-- 应用会阻止 JNLP 下载；
-- 优先使用 HTML5 控制台；
+- 华为 / 超聚变 iBMC 一律直接进入 HTML5 控制台（`/#/kvm_h5`），并确认画面已经出现；
+- 该路由不可用时会点主页「开始」菜单里的 HTML5 入口，主页把 Java 排在前面也不会误点；
+- 应用会阻止 JNLP 下载，并自动切回 HTML5；
+- 若提示「该 iBMC 未提供 HTML5 控制台」，说明该固件只有 Java KVM：请升级 iBMC 固件，或在连接页改用 VNC；
 - 自动登录失败时手动登录，登录成功后应用会自动进入 HTML5。
 
 ### 凭据显示未知/不可用
@@ -160,5 +162,5 @@ BMC 页面触发的下载：
 
 ---
 
-版本：2.3.3  
-发布日期：2026-11-24
+版本：2.3.4  
+发布日期：2026-11-26

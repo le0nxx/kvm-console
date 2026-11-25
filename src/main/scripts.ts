@@ -104,11 +104,19 @@ export function launchKvmScript(): string {
     ${HELPERS}
     const KVM = /(KVM|虚拟控制台|远程控制台|远程会话|虚拟终端|Virtual\\s*Console|Remote\\s*Console|iKVM|Console\\s*Redirection)/i;
     const MENU = /(远程控制|远程管理|远程运维|控制台|Remote\\s*Control|Remote\\s*Management|Console)/i;
+    // Java entries only download kvm.jnlp, so they are never selected; HTML5
+    // entries win over anything else when both are listed.
+    const JAVA = /\\bjava\\b|jnlp/i;
+    const HTML5 = /html\\s*5|\\bh5\\b/i;
+    const off = (el) => Boolean(el.disabled) || el.getAttribute('aria-disabled') === 'true' ||
+      /itemDisable|\\bdisabled\\b/i.test(String(el.className || ''));
     const pick = (re) => {
       const all = [...document.querySelectorAll(__clickables + ',[aria-label],[title]')]
-        .filter((el) => __vis(el) && re.test(__text(el)) && __text(el).length < 48);
+        .filter((el) => __vis(el) && re.test(__text(el)) && __text(el).length < 48 && !JAVA.test(__text(el)) && !off(el));
       all.sort((a, b) => {
-        const score = (el) => (el.matches('a,button,[role=button],[onclick]') ? 0 : 2) + (el.children.length > 3 ? 1 : 0);
+        const score = (el) => (HTML5.test(__text(el)) ? 0 : 4)
+          + (el.matches('a,button,[role=button],[onclick]') ? 0 : 1)
+          + (el.children.length > 3 ? 1 : 0);
         return score(a) - score(b);
       });
       return all[0] || null;
@@ -131,6 +139,78 @@ export function launchKvmScript(): string {
     el.click();
     await __sleep(500);
     return { ok: true, label, viaMenu, url: location.href };
+  })()`;
+}
+
+/**
+ * iBMC/xFusion: enter the HTML5 console and verify it renders. `#/kvm_h5` is
+ * the HTML5 route; when the firmware ignores it, the home page's "Start" menu
+ * lists HTML5 and Java entries, so click the HTML5 one by id or label. Java
+ * entries are never clicked: they only download kvm.jnlp.
+ */
+export function ibmcHtml5Script(): string {
+  return `(async () => {
+    ${HELPERS}
+    const JAVA = /\\bjava\\b|jnlp/i;
+    const HTML5 = /html\\s*5|\\bh5\\b/i;
+    const hasCanvas = () => [...document.querySelectorAll('canvas')]
+      .some((c) => c.width >= 160 && c.height >= 120) ||
+      [...document.querySelectorAll('video')].some((v) => v.videoWidth > 0);
+    const waitCanvas = async (ms) => {
+      for (let t = 0; t < ms; t += 400) {
+        if (hasCanvas()) return true;
+        await __sleep(400);
+      }
+      return hasCanvas();
+    };
+    const limit = () => /reached the limit|forced to log out|Failed to open the console|达到.{0,4}上限|强制注销/i
+      .test((document.body && document.body.innerText) || '');
+
+    if ([...document.querySelectorAll('input[type=password]')].some(__vis)) {
+      return { ok: false, reason: 'login' };
+    }
+    try { sessionStorage.setItem('kvmConnect', '1'); } catch (e) {}
+    try { localStorage.setItem('H5ClientModel', 'Private'); } catch (e) {}
+    if (/#\\/kvm_h5/i.test(location.hash)) {
+      location.hash = '#/navigate/home';
+      await __sleep(600);
+    }
+    location.hash = '#/kvm_h5';
+    // Poll the route instead of sleeping a fixed time: the lazy-loaded console
+    // chunk can be slow, while a firmware without HTML5 redirects immediately.
+    const started = Date.now();
+    while (Date.now() - started < 12000) {
+      if (hasCanvas()) return { ok: true, via: 'route' };
+      if (limit()) return { ok: false, reason: 'busy' };
+      if (!/#\\/kvm_h5/i.test(location.hash)) break;
+      await __sleep(400);
+    }
+    // Still on the route: waitForFrame keeps waiting for the canvas.
+    if (/#\\/kvm_h5/i.test(location.hash)) return { ok: true, via: 'route' };
+
+    const off = (el) => Boolean(el.disabled) || el.getAttribute('aria-disabled') === 'true' ||
+      /itemDisable|\\bdisabled\\b/i.test(String(el.className || ''));
+    const entry = () => {
+      const titled = [...document.querySelectorAll('#h5Only, #h5Share')];
+      const candidates = titled.length ? titled : [...document.querySelectorAll(__clickables + ',[title]')];
+      return candidates.find((el) => {
+        if (el.id === 'javaOnly' || el.id === 'javaShare') return false;
+        const text = (el.getAttribute('title') || '') + ' ' + __text(el);
+        return HTML5.test(text) && !JAVA.test(text) && !off(el);
+      }) || null;
+    };
+
+    // The home card renders after the route redirect; poll for its entry.
+    let item = null;
+    for (let i = 0; i < 8 && !item; i++) {
+      item = entry();
+      if (!item) await __sleep(500);
+    }
+    if (!item) return { ok: false, reason: limit() ? 'busy' : 'no-h5' };
+    const label = __text(item).slice(0, 40);
+    item.click();
+    if (await waitCanvas(12000)) return { ok: true, via: 'entry', label };
+    return { ok: false, reason: 'no-canvas', label };
   })()`;
 }
 
@@ -388,7 +468,7 @@ export function startConsoleScript(): string {
     const els = [...document.querySelectorAll('button,a,[role=button],div,span')]
       .filter((el) => __vis(el))
       .map((el) => ({ el, t: __text(el).trim() }))
-      .filter((x) => x.t.length > 0 && x.t.length < 60 && RE.test(x.t));
+      .filter((x) => x.t.length > 0 && x.t.length < 60 && RE.test(x.t) && !/\\bjava\\b|jnlp/i.test(x.t));
     if (!els.length) return { ok: false };
     els[0].el.click();
     return { ok: true, label: els[0].t };

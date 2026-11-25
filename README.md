@@ -53,7 +53,7 @@ KVM Console 用**连接历史 + 网段扫描**代替设备台账，不强制命�
 ### Arch Linux
 
 ```bash
-sudo pacman -U kvm-console-2.3.3-1-x86_64.pkg.tar.zst
+sudo pacman -U kvm-console-2.3.4-1-x86_64.pkg.tar.zst
 kvm-console
 ```
 
@@ -154,13 +154,6 @@ TypeScript 开了 `noUnusedLocals` / `noUnusedParameters` / `noImplicitReturns`�
 KVM_DEBUG=1 npm start            # 会话/快捷键轨迹 → debug.log、shortcut-debug.log
 KVM_DEBUG_CONSOLE=1 npm start    # 另外记录 BMC 页面的 console 输出
 KVM_DEBUG_VNC=1 npm start        # VNC 逐帧流量 → wire-debug.log
-```
-
-发布到共享目录（按系统分 `Windows/`、`Linux/`、`Docs/`，并重算根目录 `SHA256SUMS`）：
-
-```bash
-./scripts/publish-share.sh              # 版本取自 package.json
-./scripts/publish-share.sh 2.3.3 /path/to/share
 ```
 
 项目结构：

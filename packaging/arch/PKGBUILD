@@ -1,6 +1,6 @@
 # Maintainer: KVM Console <kvm@localhost>
 pkgname=kvm-console
-pkgver=2.3.3
+pkgver=2.3.4
 pkgrel=1
 pkgdesc='Multi-session web KVM console for Huawei/xFusion, Dell iDRAC and Inspur BMCs'
 arch=('x86_64')
